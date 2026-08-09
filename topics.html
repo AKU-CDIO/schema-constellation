@@ -78,6 +78,8 @@ const outFull = t => t.sp.out;
 const domOf = t => outFull(t).replace("tbl_FCAP1A_", "").replace("_Extended", "").replace("_Merged", "");
 const planName = t => "sp_FCAP1A_" + domOf(t);
 const procName = t => "usp_Build_" + t.sp.name;
+const CAT_ORDER = ["identity", "encounter", "diagnosis", "medication", "allergy",
+  "immunization", "lab", "family", "vitals", "careplan", "registry"];
 
 function valSql(topic, members, anchor){
   if (!topic.sp) return null;
@@ -197,6 +199,7 @@ function topicBlock(ph, t, tables, rels){
       ${visMembers.map(m => { const s = spineOf(m.name); return `<div class="jp"><span>${esc(s)}</span><span class="arr">→</span><span>${esc(m.name)}</span><code>ON SourceID + VisitID</code><em>1:N</em></div>`; }).join("")}
     </div>` : "";
   const metaChips = [
+    `<span class="chip" style="color:var(--muted)">${esc(ph.name)}</span>`,
     t.sp ? `${esc(planName(t))} <em>· ${esc(procName(t))}</em>` : (t.avail === "Yes" ? "No dedicated SP plan yet" : "Not available"),
     `${members.length} source tables`,
     keys.length ? keys.join(" · ") : "SourceID + PatientID",
@@ -275,19 +278,34 @@ Promise.all([
   allKeys.add("SourceID + VisitID");
   $("#tpKeys").textContent = allKeys.size;
 
-  const toc = pd.phases.map(ph =>
-    `<a href="#phase-${ph.id}" style="--tone:${PHCOLOR[ph.id] || "#2f6bff"}">${esc(ph.name)}<b>${ph.topics.length} topics · ${ph.topics.filter(t => t.sp).length} SP</b></a>`).join("");
-  const body = pd.phases.map(ph => `
-    <div class="phase-block" id="phase-${ph.id}">
-      <div class="phase-head" style="--tone:${PHCOLOR[ph.id] || "#2f6bff"}">
+  const catMeta = {};
+  (d.topics || []).forEach(t => { catMeta[t.id] = t; });
+  const catName = id => (catMeta[id] && catMeta[id].name) || id;
+  const catColor = id => (catMeta[id] && catMeta[id].color) || "#2f6bff";
+
+  const toc = CAT_ORDER.map(id => {
+    const items = allTopics.filter(({t}) => t.cat === id);
+    if (!items.length) return "";
+    return `<a href="#cat-${id}" style="--tone:${catColor(id)}">${esc(catName(id))}<b>${items.length} topics · ${items.filter(({t}) => t.sp).length} SP</b></a>`;
+  }).join("");
+  const body = CAT_ORDER.map(id => {
+    const items = allTopics.filter(({t}) => t.cat === id);
+    if (!items.length) return "";
+    const color = catColor(id);
+    const phases = [...new Set(items.map(({ph}) => ph.id))];
+    const nTbls = items.reduce((a, {t}) => a + t.tables.length, 0);
+    return `
+    <div class="phase-block" id="cat-${id}">
+      <div class="phase-head" style="--tone:${color}">
         <div>
-          <div class="section-title">${esc(ph.name)}</div>
-          <h2>${ph.topics.length} data topics${ph.topics.some(t => t.sp) ? ` · ${ph.topics.filter(t => t.sp).length} FCAP1A SP plans` : " · no SP plans yet"}</h2>
+          <div class="section-title">Data Topic category</div>
+          <h2>${esc(catName(id))} · ${items.length} data topics${items.filter(({t}) => t.sp).length ? ` · ${items.filter(({t}) => t.sp).length} FCAP1A SP plans` : ""}</h2>
         </div>
-        <span class="chip" style="color:${PHCOLOR[ph.id] || "#2f6bff"}">${ph.topics.filter(t => t.tables.length).length} with source tables · ${ph.topics.filter(t => !t.tables.length).length} external/future</span>
+        <span class="chip" style="color:${color}">${items.filter(({t}) => t.tables.length).length} with source tables · ${items.filter(({t}) => !t.tables.length).length} external/future · across ${phases.length} ${phases.length === 1 ? "phase" : "phases"}</span>
       </div>
-      <div class="phase-grid">${ph.topics.map(t => topicBlock(ph, t, tables, rels)).join("")}</div>
-    </div>`).join("");
+      <div class="phase-grid">${items.map(({ph, t}) => topicBlock(ph, t, tables, rels)).join("")}</div>
+    </div>`;
+  }).join("");
 
   root.innerHTML = `<div class="phase-toc">${toc}</div>${body}`;
 
@@ -346,7 +364,7 @@ Promise.all([
       ph.style.display = showPh ? "" : "none";
       if (showPh){ shownPhases++; shown += vis; shownTbls += phTbls; }
     });
-    tpSearchCount.textContent = q ? (shownTbls + " tables · " + shown + " topics · " + shownPhases + " phases") : "";
+    tpSearchCount.textContent = q ? (shownTbls + " tables · " + shown + " topics · " + shownPhases + " categories") : "";
   };
   if (tpSearch) tpSearch.addEventListener("input", applyTpFilter);
 
@@ -354,7 +372,7 @@ Promise.all([
     const h = location.hash.replace(/^#/, "");
     if (!h) return;
     const id = h.startsWith("topic-") ? h.slice(6) : h;
-    const el = document.getElementById("topic-" + id) || document.getElementById(h) || document.getElementById("phase-" + id);
+    const el = document.getElementById("topic-" + id) || document.getElementById(h) || document.getElementById("cat-" + id);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     el.classList.add("flash");

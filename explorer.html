@@ -647,33 +647,19 @@ function placeRings(list, cx, cy, rStart, pitch, step, flat){
   return r;
 }
 
-function buildTopicPositions(topicId){
+function ringPositions(members, opts){
   pos = {};
-  const topic = DATA.topics.find(t => t.id === topicId);
-  const members = Object.keys(DATA.tables).filter(n =>
-    isSource(n) && DATA.tables[n].topic === topicId && n !== "HimRec_Main");
   const hub = "HimRec_Main";
   pos[hub] = { x: ctx.cx, y: ctx.cy };
   const dicts = [];
-  const conns = [...members, "HimRec_Main"];
+  const conns = [...members, hub];
   conns.forEach(m => {
     (relByFrom[m] || []).forEach(r => {
       if (DATA.tables[r.to] && DATA.tables[r.to].role === "dict" && !dicts.includes(r.to) && r.to !== hub) dicts.push(r.to);
     });
   });
-  const linked = [];
-  if (topicId === "pipeline"){
-    members.forEach(m => {
-      (relByFrom[m] || []).forEach(r => {
-        const t = DATA.tables[r.to];
-        if (t && !members.includes(r.to) && !dicts.includes(r.to) && !linked.includes(r.to) && r.to !== hub) linked.push(r.to);
-      });
-      (relByTo[m] || []).forEach(r => {
-        const t = DATA.tables[r.from];
-        if (t && !members.includes(r.from) && !dicts.includes(r.from) && !linked.includes(r.from) && r.from !== hub) linked.push(r.from);
-      });
-    });
-  }
+  let linked = (opts && opts.linked) || [];
+  linked = linked.filter(m => !dicts.includes(m) && m !== hub);
   window.__linkedIds = linked;
   const ring1 = members.filter(m => !dicts.includes(m) && !linked.includes(m));
   const nTotal = ring1.length + dicts.length + linked.length + 1;
@@ -682,14 +668,13 @@ function buildTopicPositions(topicId){
   const cfg = sizeConfig();
   state.mode = prevMode;
   const cardW = cfg.maxW;
-  const cardH = cfg.hd + cfg.lineH + cfg.bd;      /* worst case (2 lines) */
   const flat = 0.6;
   const pitch = cardW + 34;                        /* within-ring arc spacing */
   const sep = cardW + 44;                          /* ring-to-ring radial gap */
   const cx = ctx.cx, cy = ctx.cy;
   /* members ring: radius large enough to hold all members at `pitch` and
      clear of the centre hub; the ellipse (flat) shrinks the vertical span
-     so fitToExtent can scale the whole topic view up */
+     so fitToExtent can scale the whole view up */
   const r1 = Math.max(300, (ring1.length * pitch) / (Math.PI * 2));
   const start = -Math.PI / 2;
   ring1.forEach((m, i) => {
@@ -706,6 +691,27 @@ function buildTopicPositions(topicId){
     const a = start + (i / Math.max(1, linked.length)) * Math.PI * 2;
     pos[m] = { x: cx + Math.cos(a) * r3, y: cy + Math.sin(a) * r3 * flat };
   });
+  return { dicts, linked };
+}
+
+function buildTopicPositions(topicId){
+  const topic = DATA.topics.find(t => t.id === topicId);
+  const members = Object.keys(DATA.tables).filter(n =>
+    isSource(n) && DATA.tables[n].topic === topicId && n !== "HimRec_Main");
+  const linked = [];
+  if (topicId === "pipeline"){
+    members.forEach(m => {
+      (relByFrom[m] || []).forEach(r => {
+        const t = DATA.tables[r.to];
+        if (t && !members.includes(r.to) && !linked.includes(r.to) && r.to !== "HimRec_Main") linked.push(r.to);
+      });
+      (relByTo[m] || []).forEach(r => {
+        const t = DATA.tables[r.from];
+        if (t && !members.includes(r.from) && !linked.includes(r.from) && r.from !== "HimRec_Main") linked.push(r.from);
+      });
+    });
+  }
+  const { dicts } = ringPositions(members, { linked });
   return { topic, members, dicts, linked };
 }
 
@@ -739,17 +745,10 @@ function buildTablePositions(name){
 }
 
 function buildDocPositions(){
-  pos = {};
   const ids = state.docIds || new Set();
-  const hub = "HimRec_Main";
-  if (ids.has(hub)) pos[hub] = { x: ctx.cx, y: ctx.cy };
-  const others = [...ids].filter(x => x !== hub);
-  const r = Math.max(300, Math.min(600, 300 + others.length * 24));
-  const start = -Math.PI / 2;
-  others.forEach((m, i) => {
-    const a = start + (i / Math.max(1, others.length)) * Math.PI * 2;
-    pos[m] = { x: ctx.cx + Math.cos(a) * r, y: ctx.cy + Math.sin(a) * r * 0.6 };
-  });
+  const members = [...ids].filter(n => n !== "HimRec_Main");
+  ringPositions(members);
+  return members;
 }
 
 /* ============================= SVG render ============================= */
@@ -789,7 +788,11 @@ function visibleIds(){
   const onlyVisit = vf && vf.checked;
   const filt = s => { if (!onlyVisit) return s; return new Set([...s].filter(n => hasVisitID(DATA.tables[n]))); };
   if (state.mode === "overview") return filt(new Set(Object.keys(DATA.tables).filter(isSource)));
-  if (state.mode === "doc") return filt(new Set([...(state.docIds || [])].filter(isSource)));
+  if (state.mode === "doc"){
+    const ds = new Set([...(state.docIds || [])].filter(isSource));
+    ds.add("HimRec_Main");
+    return filt(ds);
+  }
   if (state.mode === "topic"){
     const s = new Set(Object.keys(DATA.tables).filter(n => isSource(n) && DATA.tables[n].topic === state.topicId));
     (window.__linkedIds || []).forEach(n => { if (isSource(n)) s.add(n); });
@@ -861,15 +864,16 @@ function render(){
     if (!isHubEdge) path.setAttribute("marker-end", "url(#arrow)");
     root.appendChild(path);
 
-    /* join-key initials on the arrow (focused views only): PI, VI, DI …
+    /* join-key initials on the line (focused views only): PI, VI, DI …
+       every edge is labelled, including the hub star links;
        hover reveals the full key name in the tooltip */
-    if (!isHubEdge && state.mode !== "overview" && r.on){
+    if (state.mode !== "overview" && r.on){
       const lbl = document.createElementNS(NS, "text");
       const cf = sizeConfig();
       lbl.setAttribute("x", midx);
       lbl.setAttribute("y", midy - 3);
       lbl.setAttribute("text-anchor", "middle");
-      lbl.setAttribute("class", "edgelabel " + keyFamily(r.on));
+      lbl.setAttribute("class", "edgelabel " + (isHubEdge ? "kp" : keyFamily(r.on)));
       lbl.setAttribute("font-size", Math.max(9, Math.round(cf.font * 0.52)));
       lbl.setAttribute("data-a", a); lbl.setAttribute("data-b", b);
       lbl.setAttribute("data-on", r.on);
@@ -1418,12 +1422,19 @@ function renderDocTopic(t){
   });
   const gb = $("#docGraphBtn");
   if (gb) gb.addEventListener("click", () => showDocInGraph(t));
-  if (curated.length) showDocInGraph(t);
+  showDocInGraph(t);
 }
 
 function showDocInGraph(t){
   state.docName = t.t;
-  state.docIds = new Set(phCurated(t));
+  let curated = phCurated(t);
+  if (!curated.length){
+    /* start-schema context: subtopic with no curated tables shows its
+       category's full source set so the graph is never left empty */
+    curated = Object.keys(DATA.tables).filter(n =>
+      isSource(n) && DATA.tables[n].topic === t.cat && n !== "HimRec_Main");
+  }
+  state.docIds = new Set(curated);
   setView("doc");
 }
 

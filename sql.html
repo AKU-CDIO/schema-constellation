@@ -55,10 +55,64 @@
 <script>
 const $ = (s, r=document) => r.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-fetch("data/schema.js?v=3").then(r => r.text()).then(t => {
+const PHCOLOR = {core:"#2f6bff", ops:"#7c3aed", imaging:"#059669", specialty:"#d97706", future:"#db2777"};
+const CAT_ORDER = ["identity", "encounter", "diagnosis", "medication", "allergy",
+  "immunization", "lab", "family", "vitals", "careplan", "registry"];
+const dbOf = n => n === "AdmVisits" ? "AKULivendb" : "AKULiveATdb";
+const hasVisitID = t => (t.cols || []).some(c => c.n === "VisitID");
+const spineOf = n => /^(RegAcct_|PcsAcct|OmOrd|Pth|ItsResult|EmrAcctRep)/.test(n) ? "RegAcct_Main" : "AdmVisits";
+const outFull = t => t.sp.out;
+const domOf = t => outFull(t).replace("tbl_FCAP1A_", "").replace("_Extended", "").replace("_Merged", "");
+const planName = t => "sp_FCAP1A_" + domOf(t);
+const procName = t => "usp_Build_" + t.sp.name;
+
+function valSql(topic, members, anchor){
+  if (!topic.sp) return null;
+  const out = outFull(topic);
+  const dom = domOf(topic);
+  const L = [];
+  L.push(`-- ============================================================`);
+  L.push(`-- SP PLAN    : ${planName(topic)}  (proc ${procName(topic)})`);
+  L.push(`-- OUTPUT     : CDIO_MeditechDB.dbo.${out}`);
+  L.push(`-- SOURCES    : ${members.length} tables (${dbOf(members[0].name)} + AKULivendb)`);
+  L.push(`-- ============================================================`);
+  L.push(`--`);
+  L.push(`-- (1) SOURCE HEALTH - run BEFORE the build`);
+  members.forEach(t => L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients FROM ${dbOf(t.name)}.dbo.${t.name};`));
+  L.push(`--`);
+  L.push(`-- (2) KEY INTEGRITY - composite SourceID + PatientID must be complete`);
+  members.forEach(t => L.push(`SELECT COUNT(*) AS MissingKey FROM ${dbOf(t.name)}.dbo.${t.name} WHERE SourceID IS NULL OR PatientID IS NULL;`));
+  const vis = members.filter(hasVisitID);
+  if (vis.length){
+    L.push(`--`);
+    L.push(`-- (2b) VISIT GRAIN - every VisitID must resolve to the encounter spine (${spineOf(vis[0].name)}.VisitID)`);
+    vis.forEach(t => {
+      const s = spineOf(t.name);
+      L.push(`SELECT COUNT(*) AS MissingVisit FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(s)}.dbo.${s} v ON t.SourceID=v.SourceID AND t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`);
+    });
+  }
+  L.push(`--`);
+  L.push(`-- (3) HUB LINKAGE - no orphan rows vs ${anchor}`);
+  members.filter(t => t.name !== anchor).forEach(t => L.push(
+    `SELECT COUNT(*) AS Orphans FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(anchor)}.dbo.${anchor} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE h.PatientID IS NULL;`));
+  L.push(`--`);
+  L.push(`-- (4) OUTPUT CONTRACT - run AFTER the build`);
+  L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients, COUNT(DISTINCT VisitID) AS Visits FROM CDIO_MeditechDB.dbo.${out};`);
+  L.push(`--`);
+  L.push(`-- (5) CROSS-SP - this output must be a subset of the Demographics universe`);
+  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
+  return L.join("\n");
+}
+
+Promise.all([
+  fetch("data/schema.js?v=4").then(r => r.text()),
+  fetch("data/phases.js?v=4").then(r => r.text()),
+]).then(([t, p]) => {
   const m = t.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
-  if (!m) throw new Error("no schema data");
+  const pm = p.match(/window\.SCHEMA_PHASES\s*=\s*(\{.*\});/s);
+  if (!m || !pm) throw new Error("no schema/phase data");
   const d = JSON.parse(m[1]);
+  const pd = JSON.parse(pm[1]);
   const root = $("#sqlList");
   if (!d.questions) return;
   root.innerHTML = d.questions.map(q => {
@@ -92,8 +146,77 @@ fetch("data/schema.js?v=3").then(r => r.text()).then(t => {
       }).catch(() => {});
     });
   });
+
+  /* ---- per-topic validation queries (one per data topic, grouped by category) ---- */
+  const catMeta = {};
+  (d.topics || []).forEach(t2 => { catMeta[t2.id] = t2; });
+  const catName = id => (catMeta[id] && catMeta[id].name) || id;
+  const catColor = id => (catMeta[id] && catMeta[id].color) || "#2f6bff";
+  const allTopics = [];
+  pd.phases.forEach(ph => ph.topics.forEach(t => allTopics.push({ph, t})));
+
+  const qCard = ({ph, t}) => {
+    const color = PHCOLOR[ph.id] || "#2f6bff";
+    const members = t.tables.map(n => d.tables[n]).filter(Boolean);
+    let body = `<div class="na-note">${esc(t.note || "External to the relational Meditech schema.")}</div>`;
+    if (members.length && t.sp){
+      const anchor = (members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
+      const sql = valSql(t, members, anchor);
+      body = `<details class="sql-card" style="margin-top:12px">
+        <summary>Validation SQL · ${esc(planName(t))}</summary>
+        <pre class="sql-code"><code>${esc(sql)}</code></pre>
+        <button class="btn ghost sm copy-btn" data-sql="${esc(sql)}">Copy SQL</button>
+      </details>`;
+    } else if (members.length){
+      const sql = members.map(m => `SELECT TOP 10 *\nFROM [${dbOf(m.name)}].[dbo].[${m.name}];`).join("\n");
+      body = `<pre class="sql-code" style="margin-top:12px"><code>${esc(sql)}</code></pre>
+        <button class="btn ghost sm copy-btn" data-sql="${esc(sql)}">Copy SQL</button>`;
+    }
+    return `
+    <div class="sql-card">
+      <div class="sql-head">
+        <div class="sql-q">${esc(t.name)}</div>
+        <div class="sql-topic">${esc(ph.name)} · ${t.sp ? esc(planName(t)) : "no SP plan"}</div>
+      </div>
+      ${body}
+    </div>`;
+  };
+
+  const sec = document.createElement("div");
+  sec.innerHTML = `<div class="section-title" style="margin-top:2.6rem">Per-topic validation queries</div>
+    <h2 class="section-head">Every data topic · one query</h2>
+    ${CAT_ORDER.map(id => {
+      const items = allTopics.filter(x => x.t.cat === id);
+      if (!items.length) return "";
+      const color = catColor(id);
+      const nTbls = items.reduce((a, x) => a + x.t.tables.length, 0);
+      return `
+      <div class="phase-block" id="cat-${id}">
+        <div class="phase-head" style="--tone:${color}">
+          <div>
+            <div class="section-title">Data Topic category</div>
+            <h2>${esc(catName(id))} · ${items.length} topics</h2>
+          </div>
+          <span class="chip" style="color:${color}">${nTbls} source tables</span>
+        </div>
+        <div class="phase-grid">${items.map(qCard).join("")}</div>
+      </div>`;
+    }).join("")}`;
+  root.after(sec);
+
+  sec.querySelectorAll(".copy-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      const raw = b.getAttribute("data-sql");
+      if (!raw) return;
+      const text = raw.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+      navigator.clipboard.writeText(text).then(() => {
+        b.textContent = "Copied ✓";
+        setTimeout(() => b.textContent = "Copy SQL", 1500);
+      }).catch(() => {});
+    });
+  });
 }).catch(() => {
-  $("#sqlList").innerHTML = '<div class="topic-loading">Could not load data/schema.js?v=3.</div>';
+  $("#sqlList").innerHTML = '<div class="topic-loading">Could not load data/schema.js?v=4.</div>';
 });
 </script>
 </body>

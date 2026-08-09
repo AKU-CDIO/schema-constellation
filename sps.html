@@ -33,7 +33,7 @@
   <div class="wrap">
     <div class="section-title">SP Generation Workspace</div>
     <h1>One stored procedure per data topic.</h1>
-    <p class="lead">Each FCAP1A topic below is the blueprint for a stored procedure: which source tables it reads, the exact join keys, the validation it must pass, and how its output reconciles with the other SPs. Topics are grouped by the five data phases; everything is generated from the curated schema — no guesses.</p>
+    <p class="lead">Each FCAP1A topic below is the blueprint for a stored procedure: which source tables it reads, the exact join keys, the validation it must pass, and how its output reconciles with the other SPs. Topics are grouped by the eleven data-topic categories (with their phase shown on each block); everything is generated from the curated schema — no guesses.</p>
     <div class="stats" id="spStats" style="margin-top:1.1rem">
       <div class="stat"><b id="spN">—</b><span>SP proposals</span></div>
       <div class="stat"><b id="spTbls">—</b><span>Source tables</span></div>
@@ -83,6 +83,8 @@ const outFull = t => t.sp.out;
 const domOf = t => outFull(t).replace("tbl_FCAP1A_", "").replace("_Extended", "").replace("_Merged", "");
 const planName = t => "sp_FCAP1A_" + domOf(t);
 const procName = t => "usp_Build_" + t.sp.name;
+const CAT_ORDER = ["identity", "encounter", "diagnosis", "medication", "allergy",
+  "immunization", "lab", "family", "vitals", "careplan", "registry"];
 
 function valSql(topic, members, anchor){
   if (!topic.sp) return null;
@@ -185,6 +187,7 @@ function spBlock(ph, t, tables, rels){
       ${visMembers.map(m => { const s = spineOf(m.name); return `<div class="jp"><span>${esc(s)}</span><span class="arr">→</span><span>${esc(m.name)}</span><code>ON SourceID + VisitID</code><em>1:N</em></div>`; }).join("")}
     </div>` : "";
   const metaChips = [
+    `<span class="chip" style="color:var(--muted)">${esc(ph.name)}</span>`,
     `${esc(planName(t))} <em>· ${esc(procName(t))}</em>`,
     `${members.length} source tables`,
     keys.length ? keys.join(" · ") : "SourceID + PatientID",
@@ -250,6 +253,11 @@ Promise.all([
   pd.phases.forEach(ph => ph.topics.forEach(t => allTopics.push({ph, t})));
   const spTopics = allTopics.filter(({t}) => t.sp && t.tables.length);
 
+  const catMeta = {};
+  (d.topics || []).forEach(t => { catMeta[t.id] = t; });
+  const catName = id => (catMeta[id] && catMeta[id].name) || id;
+  const catColor = id => (catMeta[id] && catMeta[id].color) || "#2f6bff";
+
   $("#spN").textContent = spTopics.length;
   $("#spTbls").textContent = spTopics.reduce((a, {t}) => a + t.tables.length, 0);
   const allKeys = new Set();
@@ -260,23 +268,26 @@ Promise.all([
   $("#spKeys").textContent = allKeys.size;
   $("#spVisit").textContent = spTopics.reduce((a, {t}) => a + t.tables.filter(n => (tables[n] || {}).cols && hasVisitID(tables[n])).length, 0);
 
-  $("#spToc").innerHTML = pd.phases.filter(ph => ph.topics.some(t => t.sp)).map(ph =>
-    `<a href="#phase-${ph.id}" style="--tone:${PHCOLOR[ph.id] || "#2f6bff"}">${esc(ph.name)}<b>${ph.topics.filter(t => t.sp).length} SP</b></a>`).join("");
+  const spByCat = {};
+  spTopics.forEach(({ph, t}) => { (spByCat[t.cat] = spByCat[t.cat] || []).push({ph, t}); });
 
-  const body = pd.phases.filter(ph => ph.topics.some(t => t.sp)).map(ph => {
-    const color = PHCOLOR[ph.id] || "#2f6bff";
-    const items = ph.topics.filter(t => t.sp && t.tables.length);
-    const nTbls = items.reduce((a, t) => a + t.tables.length, 0);
+  $("#spToc").innerHTML = CAT_ORDER.filter(id => spByCat[id]).map(id =>
+    `<a href="#cat-${id}" style="--tone:${catColor(id)}">${esc(catName(id))}<b>${spByCat[id].length} SP</b></a>`).join("");
+
+  const body = CAT_ORDER.filter(id => spByCat[id]).map(id => {
+    const items = spByCat[id];
+    const color = catColor(id);
+    const nTbls = items.reduce((a, {t}) => a + t.tables.length, 0);
     return `
-    <div class="phase-block" id="phase-${ph.id}">
+    <div class="phase-block" id="cat-${id}">
       <div class="phase-head" style="--tone:${color}">
         <div>
-          <div class="section-title">${esc(ph.name)}</div>
-          <h2>${items.length} FCAP1A SP plans${ph.topics.some(t => t.sp && !t.tables.length) ? " · 1 plan pending source tables" : ""}</h2>
+          <div class="section-title">Data Topic category</div>
+          <h2>${esc(catName(id))} · ${items.length} FCAP1A SP plans</h2>
         </div>
         <span class="chip" style="color:${color}">${nTbls} source tables</span>
       </div>
-      <div class="phase-grid">${items.map(t => spBlock(ph, t, tables, rels)).join("")}</div>
+      <div class="phase-grid">${items.map(({ph, t}) => spBlock(ph, t, tables, rels)).join("")}</div>
     </div>`;
   }).join("");
 
@@ -337,15 +348,15 @@ Promise.all([
       ph.style.display = showPh ? "" : "none";
       if (showPh){ shownPhases++; shown += vis; shownTbls += phTbls; }
     });
-    spSearchCount.textContent = q ? (shownTbls + " tables · " + shown + " SPs · " + shownPhases + " phases") : "";
+    spSearchCount.textContent = q ? (shownTbls + " tables · " + shown + " SPs · " + shownPhases + " categories") : "";
   };
   if (spSearch) spSearch.addEventListener("input", applySpFilter);
 
   const openSpHash = () => {
     const h = location.hash.replace(/^#/, "");
     if (!h) return;
-    const id = h.startsWith("topic-") ? h.slice(6) : (h.startsWith("sp-") ? h.slice(3) : (h.startsWith("phase-") ? h.slice(6) : h));
-    const el = document.getElementById("topic-" + id) || document.getElementById("sp-" + id) || document.getElementById("phase-" + id);
+    const id = h.startsWith("topic-") ? h.slice(6) : (h.startsWith("sp-") ? h.slice(3) : (h.startsWith("cat-") ? h.slice(4) : h));
+    const el = document.getElementById("topic-" + id) || document.getElementById("sp-" + id) || document.getElementById("cat-" + id);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     el.classList.add("flash");

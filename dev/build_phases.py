@@ -67,7 +67,8 @@ def pick_output(sp_name):
     """Choose the primary output table: prefer the one that contains the SP name stem."""
     outs = sp_outputs(sp_name)
     if not outs:
-        return "tbl_FCAP1A_" + sp_name
+        stem = sp_name[len("FCAP1A_"):] if sp_name.startswith("FCAP1A_") else sp_name
+        return "tbl_FCAP1A_" + stem
     stem = sp_name.replace("_Extended", "").lower()
     for o in outs:
         if stem in o.lower():
@@ -149,13 +150,13 @@ PHASES = [
          ["EmrAcctRep_Images"]),
         ("problemlist", "Problem List",
          "The longitudinal problem list (active, pending, office, health concerns) reconciled to the problem dictionary.",
-         "Yes", "Covered in the diagnosis build; no dedicated SP yet.", None,
+         "Yes", "Covered by the Diagnosis build (sp_FCAP1A_Diagnoses) — the full problem-list table set is planned under that SP.", "FCAP1A_Diagnoses_Extended",
          ["EmrPat_Problems", "EmrPat_ProblemsMain", "EmrPat_PendingProblems", "EmrPat_OfficeProblems", "EmrPat_HealthConcerns", "MisPatProblem_Main"]),
     ]),
     ("Phase 2 · Operational & Ancillary", "ops", [
         ("appointments", "Appointments",
          "Scheduled appointments captured on the patient master.",
-         "Yes", "Only HimRec_Appointments is in the curated source set; no SP yet.", None,
+         "Yes", "Only HimRec_Appointments is in the curated source set; the plan reads the appointment table directly off the patient hub.", "FCAP1A_Appointments",
          ["HimRec_Appointments"]),
         ("providers", "Providers & Specialties",
          "Provider reference data: provider master, groups, types and the specialty / service dictionaries.",
@@ -163,7 +164,7 @@ PHASES = [
          ["MisSpec_Main", "MisSvc_Main", "DMisProvider", "DMisProviderGroup", "DMisProviderType"]),
         ("family", "Family Medical History",
          "Family members, family problem history and relationship/consanguinity, with the relationship dictionary.",
-         "Yes", "Output exists as tbl_FCAP1A_FamilyMedicalHistory in the cohort layer; no dedicated build SP yet.", None,
+         "Yes", "Output exists as tbl_FCAP1A_FamilyMedicalHistory in the cohort layer; the plan below is the build blueprint for it.", "FCAP1A_FamilyMedicalHistory",
          ["EmrPat_FamilyMembers", "EmrPat_FamilyMembers_DeceasedComment", "EmrPat_FamilyProblemMembers", "EmrPat_FamilyProblems", "MisRelat_Main"]),
         ("micro", "Microbiology",
          "Microbiology isolates and culture findings with the procedure and result-text sources.",
@@ -182,11 +183,11 @@ PHASES = [
           "OncPlan_DateCycles", "OncPlan_Main", "OncPlan_Orders", "PcsAcctAct_PlanActivity", "PcsAcct_PlanItems", "PcsAcct_PlanText_PlanText", "PcsAcct_Plans", "PcsPlan_Main"]),
         ("medorders", "Medication Orders",
          "Medication orders in the pharmacy record and the order dictionary, independent of the MAR administrations.",
-         "Yes", "Covered by the Medications build; no dedicated SP.", None,
+         "Yes", "Covered by the Medications build (sp_FCAP1A_Medications) — the order tables are planned under that SP.", "FCAP1A_Medications_Extended",
          ["PhaRx", "PhaRxMedications", "DPhaDrugData", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"]),
         ("procorders", "Procedure Orders",
          "Procedure/order entry: order headers, categories, groups and the CPT dictionary.",
-         "Yes", "Covered by the Orders build; no dedicated SP.", None,
+         "Yes", "Covered by the Orders build (sp_FCAP1A_Orders) — the procedure-order tables are planned under that SP.", "FCAP1A_Orders",
          ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "OmCat_Main", "OmGrp_Main", "MisCpt_Main"]),
         ("claims", "Claims Data",
          "Insurance claims and claim lines.",
@@ -257,17 +258,17 @@ PHASES = [
          "No", "Ophthalmology imaging tables are external to the FCAP1A source set.", None, []),
         ("vaccines", "Vaccines",
          "Vaccine administrations and dose detail, including the vaccine dictionary.",
-         "Yes", "Covered by the Immunizations build; no dedicated SP.", None,
+         "Yes", "Covered by the Immunizations build (sp_FCAP1A_Immunizations) — the vaccine tables are planned under that SP.", "FCAP1A_Immunizations_Extended",
          ["EmrPat_Vaccines", "EmrPat_VaccinesDoses", "PhaRxImmunizationData", "MisVaccine_Main"]),
         ("otherreports", "Other Clinical Reports",
          "Patient-summary reports and generated results not tied to a single domain.",
-         "Yes", "Report text is available via the summary/report source tables; no dedicated SP.", None,
+         "Yes", "Report text is available via the summary/report source tables; the plan consolidates them into one output.", "FCAP1A_OtherReports",
          ["EmrAcctRep_Images", "EmrPatSum_Documents", "EmrPatSum_DocMrd", "EmrPatSum_Items", "EmrPatSum_GenResults", "EmrPatSum_LabResults"]),
     ]),
     ("Phase 5 · Extended & Future", "future", [
         ("registries", "Registries & Analytics",
          "Registry enrolments and longitudinal registry data (chronic conditions, last lab results).",
-         "Yes", None, None,
+         "Yes", "Plan builds the registry output from the three registry source tables.", "FCAP1A_Registries",
          ["EmrPatRegistry_Main", "EmrPatRegistry_ChronicConds", "EmrPatRegistry_LastLabResults"]),
         ("orders", "Orders",
          "All order types: order headers, the order dictionary, categories, groups and the CPT dictionary.",
