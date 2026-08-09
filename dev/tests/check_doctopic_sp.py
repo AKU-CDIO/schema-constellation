@@ -8,7 +8,8 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto("http://127.0.0.1:8123/explorer.html")
     pg.wait_for_timeout(1200)
-    # click the "Diagnosis" doc topic in the sidebar
+    # click the "Diagnosis" doc topic in the sidebar (expand its category group first)
+    pg.evaluate("Array.from(document.querySelectorAll('#doctopics .catalog-group')).find(g => g.textContent.includes('Diagnoses & Problem List')).querySelector('.cg-head').click()")
     pg.evaluate("Array.from(document.querySelectorAll('#doctopics .dtopic')).find(r => r.textContent.includes('Diagnosis')).click()")
     pg.wait_for_timeout(400)
     h = pg.evaluate("location.hash")
@@ -29,7 +30,7 @@ with sync_playwright() as p:
     # open a doc topic with no SP mapping (CT) -> note shown
     pg.evaluate("location.hash='#topic=doc:'+encodeURIComponent('CT')")
     pg.wait_for_timeout(400)
-    print("CT has note:", pg.evaluate("!!Array.from(document.querySelectorAll('#detail .notable')).find(n => n.textContent.includes('No FCAP1A SP proposal'))"))
+    print("CT has note:", pg.evaluate("!!Array.from(document.querySelectorAll('#detail .notable')).find(n => n.textContent.includes('No FCAP1A stored-procedure plan'))"))
     # back from CT
     pg.go_back(); pg.wait_for_timeout(400)
     print("back hash:", pg.evaluate("location.hash"), "| detail hidden:", pg.evaluate("document.querySelector('#detail').classList.contains('hidden')"))

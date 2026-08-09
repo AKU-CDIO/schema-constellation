@@ -388,10 +388,19 @@ const PHASES = (PHDATA.phases || []).map(ph => ({
     note: t.note || "",
     sp: t.sp || null,
     tables: (t.tables || []).slice(),
+    cat: t.cat || "lab",
   })),
 }));
 const PH_TOPICS = PHASES.flatMap(g => g.items);
 const phById = id => PH_TOPICS.find(x => x.id === id);
+/* the 11 Data Topic categories (schema.js DATA.topics), in doc order */
+const CAT_ORDER = ["identity", "encounter", "diagnosis", "medication", "allergy",
+  "immunization", "lab", "family", "vitals", "careplan", "registry"];
+const CAT_META = {};
+(DATA.topics || []).forEach(t => { CAT_META[t.id] = t; });
+const catName = id => (CAT_META[id] && CAT_META[id].name) || id;
+const catColor = id => (CAT_META[id] && CAT_META[id].color) || "#2f6bff";
+const catSrcCount = id => Object.keys(DATA.tables).filter(n => isSource(n) && DATA.tables[n].topic === id).length;
 function phCurated(item){
   const out = [];
   (item.tables || []).forEach(n => { if (DATA.tables[n] && isSource(n)) out.push(n); });
@@ -1366,6 +1375,7 @@ function renderDocTopic(t){
   const detail = $("#detail");
   const grp = PHASES.find(g => g.items.includes(t));
   const color = (grp && grp.color) || "#2f6bff";
+  const ccat = catColor(t.cat);
   const curated = phCurated(t);
   const availChip = t.a === "Yes"
     ? `<span class="chip pk" style="background:rgba(5,150,105,.12);color:#047857;border-color:rgba(5,150,105,.35)">AVAILABLE</span>`
@@ -1385,11 +1395,11 @@ function renderDocTopic(t){
     ? `<div class="notable" style="margin-top:16px">No FCAP1A stored-procedure plan for this topic yet${t.note ? " — " + esc(t.note) : ""}. See the <a href="sps.html">SP Workspace</a> for the SPs that do exist.</div>`
     : "";
   detail.innerHTML = `
-    <div class="crumb"><span class="cb" data-crumb="overview">← Back</span><span style="color:${color}">${esc((grp && grp.p) || "")}</span></div>
+    <div class="crumb"><span class="cb" data-crumb="overview">← Back</span><span style="color:${ccat}">${esc(catName(t.cat))}</span></div>
     <div class="detail-head">
       <h2><span class="ticon" style="color:${color}">${iconSvg("hub", 19)}</span>${esc(t.t)}</h2>
       <div class="badges">${availChip}${t.sp ? `<span class="chip pk" style="background:${color}1a;border-color:${color}55;color:${color}">SP PLAN</span>` : ""}</div>
-      <div class="dl">From the merged <b>Data Topic Availability</b> phases · FCAP1A curated source tables</div>
+      <div class="dl">Under <b>${esc(catName(t.cat))}</b> · ${esc((grp && grp.p) || "")} · FCAP1A curated source tables</div>
       ${note}
     </div>
     <div class="detail-body">
@@ -1595,18 +1605,26 @@ function buildSidebar(){
   });
 
   const dl = $("#doctopics");
-  PHASES.forEach(grp => {
+  const byCat = {};
+  PH_TOPICS.forEach(x => { (byCat[x.cat] = byCat[x.cat] || []).push(x); });
+  CAT_ORDER.forEach(id => {
+    const items = byCat[id] || [];
+    if (!items.length) return;
+    const meta = CAT_META[id];
+    const cSrc = catSrcCount(id);
+    const c = (meta && meta.color) || "#2f6bff";
     const gEl = document.createElement("div");
-    gEl.className = "catalog-group open";
+    gEl.className = "catalog-group";
     const head = document.createElement("div");
     head.className = "cg-head";
-    head.innerHTML = `<span class="arrow">▶</span><span class="cg-name">${esc(grp.p)}</span><span style="margin-left:auto;font-size:10px;color:var(--faint)">${grp.items.length} · ${grp.items.filter(x => x.sp).length} SP</span>`;
+    head.innerHTML = `<span class="arrow">▶</span><span style="width:8px;height:8px;border-radius:50%;background:${c};flex:none"></span><span class="cg-name">${esc(catName(id))}</span><span style="margin-left:auto;font-size:10px;color:var(--faint)">${cSrc} src · ${items.length} topics</span>`;
     const body = document.createElement("div");
     body.className = "cg-tbls";
-    grp.items.forEach(it => {
+    items.forEach(it => {
+      const grp = PHASES.find(g => g.items.includes(it));
       const row = document.createElement("div");
       row.className = "dtopic";
-      row.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${grp.color};flex:none"></span><span class="tname">${esc(it.t)}</span>${it.sp ? `<span class="davail yes">SP</span>` : ""}<span class="davail ${docAvailCls(it.a)}">${docAvailTxt(it.a)}</span>`;
+      row.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${(grp && grp.color) || "#2f6bff"};flex:none" title="${esc((grp && grp.p) || "")}"></span><span class="tname">${esc(it.t)}</span>${it.sp ? `<span class="davail yes">SP</span>` : ""}<span class="davail ${docAvailCls(it.a)}">${docAvailTxt(it.a)}</span>`;
       row.addEventListener("click", () => renderDocTopic(it));
       body.appendChild(row);
     });

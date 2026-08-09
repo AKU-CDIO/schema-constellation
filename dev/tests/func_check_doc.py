@@ -29,9 +29,9 @@ with sync_playwright() as p:
     print("== overview ==")
     run(b, pg, "overview", [
         ("184 nodes", lambda g: g.evaluate("document.querySelectorAll('.node').length") == 184),
-        ("doctopics section present", lambda g: g.evaluate("document.querySelectorAll('#doctopics .catalog-group').length") == 5),
+        ("11 category groups", lambda g: g.evaluate("document.querySelectorAll('#doctopics .catalog-group').length") == 11),
         ("doc topics count", lambda g: g.evaluate("document.querySelectorAll('#doctopics .dtopic').length")),
-        ("phases open", lambda g: g.evaluate("document.querySelectorAll('#doctopics .catalog-group.open').length") == 5),
+        ("groups collapsed by default", lambda g: g.evaluate("document.querySelectorAll('#doctopics .catalog-group.open').length") == 0),
         ("overlap pairs <= 6", lambda g: g.evaluate("""(() => {
           const ns=[...document.querySelectorAll('.node')];
           const boxes=ns.map(n=>{
@@ -57,6 +57,7 @@ with sync_playwright() as p:
 
     print("== doc topic panel ==")
     pg.evaluate("""(() => {
+      [...document.querySelectorAll('#doctopics .catalog-group')].find(g=>g.textContent.includes('Diagnoses & Problem List')).querySelector('.cg-head').click();
       const rows=[...document.querySelectorAll('#doctopics .dtopic')];
       rows.find(r=>r.textContent.includes('Diagnosis')).click();
     })()""")

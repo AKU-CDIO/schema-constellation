@@ -294,12 +294,76 @@ PHASES = [
     ]),
 ]
 
+# ---- topic -> one of the 11 Data Topic categories (schema.js DATA.topics ids) ----
+# Categories: identity, encounter, diagnosis, medication, allergy, immunization,
+# lab, family, vitals, careplan, registry. Every topic must be assigned so the
+# sidebar can drill down: Data Topics -> category -> fine-grained topic.
+CAT = {
+    "adt": "encounter",
+    "allergies": "allergy",
+    "clinicalnotes": "lab",
+    "diagnosis": "diagnosis",
+    "encounter": "encounter",
+    "vitals": "vitals",
+    "immunizations": "immunization",
+    "lab": "lab",
+    "medications": "medication",
+    "pathology": "lab",
+    "demographics": "identity",
+    "ppi": "identity",
+    "procedures": "careplan",
+    "radiology": "lab",
+    "problemlist": "diagnosis",
+    "appointments": "encounter",
+    "providers": "identity",
+    "family": "family",
+    "micro": "lab",
+    "transfusion": "lab",
+    "treatmentplan": "careplan",
+    "medorders": "medication",
+    "procorders": "careplan",
+    "claims": "registry",
+    "ecgecho": "lab",
+    "infusions": "medication",
+    "insurance": "identity",
+    "pft": "lab",
+    "rhc": "lab",
+    "social": "identity",
+    "surgery": "careplan",
+    "dicom": "lab",
+    "ct": "lab",
+    "pet": "lab",
+    "mri": "lab",
+    "echo": "lab",
+    "gi": "lab",
+    "us": "lab",
+    "cath": "lab",
+    "mammo": "lab",
+    "dpath": "lab",
+    "ob": "encounter",
+    "derm": "lab",
+    "eye": "lab",
+    "vaccines": "immunization",
+    "otherreports": "lab",
+    "registries": "registry",
+    "orders": "careplan",
+    "xray": "lab",
+    "meddevice": "careplan",
+    "genomics": "lab",
+    "biorepo": "registry",
+    "eeg": "lab",
+    "surgvideo": "lab",
+}
+
 # ---- build output ----
 phases_out = []
 total_topics = 0
 for pname, pid, topics in PHASES:
     t_out = []
     for tid, name, desc, avail, note, sp, tables in topics:
+        cat = CAT.get(tid)
+        if cat is None:
+            raise SystemExit("missing category for topic id: " + tid)
         kept = keep(tables)
         sp_out = None
         if sp:
@@ -307,6 +371,7 @@ for pname, pid, topics in PHASES:
         t_out.append({
             "id": tid, "name": name, "desc": desc,
             "avail": avail, "note": note, "sp": sp_out, "tables": kept,
+            "cat": cat,
         })
         total_topics += 1
     phases_out.append({"id": pid, "name": pname, "topics": t_out})

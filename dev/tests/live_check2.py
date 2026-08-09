@@ -20,6 +20,7 @@ with sync_playwright() as p:
     # doc topic SP plan
     pg.goto(BASE + "explorer.html")
     pg.wait_for_timeout(2000)
+    pg.evaluate("Array.from(document.querySelectorAll('#doctopics .catalog-group')).find(g => g.textContent.includes('Diagnoses & Problem List')).querySelector('.cg-head').click()")
     pg.evaluate("Array.from(document.querySelectorAll('#doctopics .dtopic')).find(r => r.textContent.includes('Diagnosis')).click()")
     pg.wait_for_timeout(400)
     print("live doc-topic SP plan:", pg.evaluate("!!Array.from(document.querySelectorAll('#detail h3')).find(h => h.textContent.includes('SP Generation Plan'))"), "| chips:", pg.evaluate("document.querySelectorAll('#detail [data-sptbl]').length"))
