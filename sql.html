@@ -1,0 +1,101 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQL Cookbook · AKU CDIO MAYO</title>
+<link rel="stylesheet" href="assets/site.css?v=4">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta name="description" content="Ready-to-run SQL for real Meditech EMR questions — cohort, demographics, diagnoses, labs, medications and more, with the join path shown.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AKU CDIO MAYO · Schema Constellation">
+<meta property="og:title" content="SQL Cookbook · AKU CDIO MAYO">
+<meta property="og:description" content="Ready-to-run SQL for real Meditech EMR questions — cohort, demographics, diagnoses, labs, medications and more, with the join path shown.">
+<meta property="og:url" content="https://storage.googleapis.com/cdio-migration-schema-constellation/sql.html">
+<meta name="twitter:card" content="summary">
+</head>
+<body>
+<nav class="nav">
+  <div class="brand">
+    <div class="logo sun"><svg viewBox="0 0 26 26" fill="none"><circle cx="13" cy="13" r="5" fill="#c9a227"/><path d="M13 2.2v3M13 20.8v3M2.2 13h3M20.8 13h3M5.4 5.4l2.1 2.1M18.5 18.5l2.1 2.1M20.6 5.4l-2.1 2.1M7.5 18.5l-2.1 2.1" stroke="#c9a227" stroke-width="1.9" stroke-linecap="round"/></svg></div>
+    <div><b>AKU <span class="gold">CDIO MAYO</span></b><small>SQL Cookbook</small></div>
+  </div>
+  <div class="links">
+    <a href="index.html">Home</a>
+    <a href="explorer.html">Explorer</a>
+    <a href="topics.html">Data Topics</a>
+    <a href="sql.html" class="active">SQL Cookbook</a>
+    <a href="sps.html">SP Workspace</a>
+  </div>
+</nav>
+
+<header class="pagehead">
+  <div class="wrap">
+    <div class="section-title">SQL Cookbook</div>
+    <h1>Real questions. Working SQL.</h1>
+    <p class="lead">Each example shows the join chain through the schema and the query that answers it — drawn from the actual FCAP1A build. Use the links to trace the tables in the explorer.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div id="sqlList">
+      <div class="topic-loading">Loading schema data…</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Schema Constellation Â· generated from the AKU Meditech schema dump + FCAP1A build stored procedures</span>
+    <span class="right"><span>Analysis window: 2022-11-05 â†’ 2026-06-14</span></span>
+  </div>
+</footer>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+fetch("data/schema.js?v=3").then(r => r.text()).then(t => {
+  const m = t.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
+  if (!m) throw new Error("no schema data");
+  const d = JSON.parse(m[1]);
+  const root = $("#sqlList");
+  if (!d.questions) return;
+  root.innerHTML = d.questions.map(q => {
+    const steps = q.path.map((tbl, i) => {
+      const on = q.on && q.on[i];
+      const t = d.tables[tbl];
+      const lbl = t ? t.label : tbl;
+      const next = i < q.path.length - 1;
+      return `
+        <span class="qs-tbl"><a href="explorer.html#tbl=${encodeURIComponent(tbl)}">${esc(tbl)}</a></span>
+        ${next && on ? `<span class="qs-on">ON <code>${esc(on)}</code></span><span class="qs-arr">â†’</span>` : ""}`;
+    }).join("");
+    return `
+    <div class="sql-card">
+      <div class="sql-head">
+        <div class="sql-q">${esc(q.q)}</div>
+        <div class="sql-topic">${esc((d.topics.find(x => x.id === q.topic) || {}).name || q.topic)}</div>
+      </div>
+      <div class="sql-path">${steps}</div>
+      <pre class="sql-code"><code>${esc(q.sql)}</code></pre>
+      <button class="btn ghost sm copy-btn" data-sql="${esc(q.sql)}">Copy SQL</button>
+    </div>`;
+  }).join("");
+
+  root.querySelectorAll(".copy-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      const text = b.getAttribute("data-sql").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+      navigator.clipboard.writeText(text).then(() => {
+        b.textContent = "Copied âœ“";
+        setTimeout(() => b.textContent = "Copy SQL", 1500);
+      }).catch(() => {});
+    });
+  });
+}).catch(() => {
+  $("#sqlList").innerHTML = '<div class="topic-loading">Could not load data/schema.js?v=3.</div>';
+});
+</script>
+</body>
+</html>
+

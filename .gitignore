@@ -1,0 +1,15 @@
+# OneDrive / system junk
+Thumbs.db
+Desktop.ini
+*.tmp
+
+# Secrets & local env
+.env
+.env.*
+*.key
+!dev/tests/device_code.py
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/

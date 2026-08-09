@@ -1,0 +1,1812 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AKU CDIO MAYO · Meditech Star Schema Explorer</title>
+<link rel="stylesheet" href="assets/site.css?v=4">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta name="description" content="Interactive star-schema constellation of the AKU Meditech EMR: click a table to see its neighbours, join keys (patient vs visit grain) and relationships, with a VisitID-only filter.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AKU CDIO MAYO · Schema Constellation">
+<meta property="og:title" content="AKU CDIO MAYO · Meditech Star Schema Explorer">
+<meta property="og:description" content="Interactive star-schema constellation of the AKU Meditech EMR: click a table to see its neighbours, join keys and relationships.">
+<meta property="og:url" content="https://storage.googleapis.com/cdio-migration-schema-constellation/explorer.html">
+<meta name="twitter:card" content="summary">
+<style>
+  :root{
+    --bg:#eef2f9; --bg2:#f3f6fb; --panel:#ffffff; --panel2:#f8fafd;
+    --line:#dbe3f0; --line2:#c5d1e5;
+    --txt:#16233d; --muted:#4c5d7c; --faint:#7182a1;
+    --accent:#2f6bff; --accent2:#0e9fbd; --good:#1a9e4e; --warn:#c2410c; --bad:#e11d48; --vio:#7c3aed;
+    --navy:#0f2a5c; --gold:#b08d2e;
+    --mono:'JetBrains Mono','Cascadia Code',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --glow:0 0 24px rgba(47,107,255,.18);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(1200px 600px at 20% -10%, rgba(47,107,255,.06), transparent 60%),
+      radial-gradient(1000px 700px at 110% 10%, rgba(176,141,46,.05), transparent 55%),
+      radial-gradient(900px 900px at 50% 120%, rgba(14,159,189,.04), transparent 60%),
+      var(--bg);
+    color:var(--txt);
+    font-family:var(--sans);
+    overflow:hidden;
+    display:flex;flex-direction:column;height:100vh;
+  }
+  #app{display:flex;flex-direction:column;flex:1;min-height:0}
+
+  /* ---------- HEADER (AKU CDIO MAYO brand bar) ---------- */
+  header{
+    display:flex;align-items:center;gap:16px;padding:10px 18px;
+    background:linear-gradient(180deg,#ffffff,rgba(255,255,255,.92));
+    border-bottom:1px solid var(--line);z-index:30;flex:none;
+    box-shadow:0 1px 0 rgba(15,42,92,.04);
+  }
+  .brand{display:flex;align-items:center;gap:12px;min-width:0;flex:none}
+  .logo{
+    width:42px;height:42px;border-radius:11px;position:relative;flex:none;
+    background:linear-gradient(135deg,#0f2a5c,#1a4d9e 65%,#2f6bff);
+    box-shadow:0 4px 14px rgba(15,42,92,.4);
+  }
+  .logo svg{position:absolute;inset:8px;width:26px;height:26px}
+  .brand h1{font-size:17px;font-weight:900;letter-spacing:.2px;white-space:nowrap;color:var(--navy)}
+  .brand h1 .gold{color:var(--gold)}
+  .brand .sub{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;letter-spacing:.3px}
+  .brand .sub b{color:var(--accent);font-weight:700}
+
+  header .links{display:flex;gap:4px;flex:none}
+  header .links a{
+    padding:7px 13px;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--muted);
+    border:1px solid transparent;transition:.15s;text-decoration:none;
+  }
+  header .links a:hover{color:var(--accent);background:rgba(47,107,255,.06)}
+  header .links a.active{color:var(--accent);border-color:rgba(47,107,255,.35);background:rgba(47,107,255,.08)}
+
+  .searchwrap{position:relative;flex:1;max-width:560px;margin-left:auto}
+  .searchwrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none}
+  #search{
+    width:100%;padding:10px 14px 10px 40px;border-radius:11px;
+    border:1px solid var(--line2);background:#fff;color:var(--txt);
+    font-size:14.5px;outline:none;transition:.2s;font-family:var(--sans);
+  }
+  #search:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,107,255,.15)}
+  #search::placeholder{color:var(--faint)}
+  .searchbox{position:absolute;top:calc(100% + 6px);left:0;right:0;display:none;
+    background:#fff;border:1px solid var(--line2);border-radius:12px;overflow:hidden;
+    box-shadow:0 20px 50px rgba(35,64,117,.25);max-height:380px;overflow-y:auto;z-index:60}
+  .searchbox.open{display:block}
+  .searchbox .item{padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+  .searchbox .item:last-child{border-bottom:none}
+  .searchbox .item:hover{background:rgba(47,107,255,.06)}
+  .searchbox .item .nm{font-family:var(--mono);font-size:13.5px;color:var(--accent)}
+  .searchbox .item .lb{font-size:12px;color:var(--muted);margin-left:auto;text-align:right}
+  .searchbox .empty{padding:14px;color:var(--faint);font-size:13px}
+
+  .stats{display:flex;gap:8px;flex:none}
+  .stat{padding:5px 13px;border-radius:10px;border:1px solid var(--line2);background:#fff;
+    font-size:11.5px;color:var(--muted);text-align:center;white-space:nowrap}
+  .stat b{display:block;font-size:14.5px;color:var(--navy);font-weight:800}
+
+  /* ---------- LAYOUT ---------- */
+  .main{display:flex;flex:1;min-height:0;position:relative}
+  aside{
+    width:252px;flex:none;background:rgba(255,255,255,.82);backdrop-filter:blur(14px);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:20;
+  }
+  .side-scroll{overflow-y:auto;flex:1;padding:12px 10px 30px}
+  .side-scroll::-webkit-scrollbar,.detail-body::-webkit-scrollbar{width:8px}
+  .side-scroll::-webkit-scrollbar-thumb,.detail-body::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
+  .side-label{font-size:11px;letter-spacing:1.5px;color:var(--faint);text-transform:uppercase;font-weight:800;
+    padding:12px 8px 6px}
+  .vf{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:12px;
+    color:var(--muted);border:1px solid var(--line2);background:#fff;margin-bottom:6px;font-weight:600}
+  .vf:hover{border-color:var(--accent)}
+  .vf input{accent-color:var(--accent);cursor:pointer}
+  .vf b{margin-left:auto;font-size:10.5px;color:var(--faint);font-family:var(--mono);font-weight:700}
+  .topic{padding:9px 10px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:10px;
+    transition:.15s;margin-bottom:2px;border:1px solid transparent}
+  .topic:hover{background:rgba(47,107,255,.06)}
+  .topic.active{background:rgba(47,107,255,.08);border-color:rgba(47,107,255,.3)}
+  .topic .dot{width:9px;height:9px;border-radius:50%;flex:none;box-shadow:0 0 8px currentColor}
+  .topic .tname{font-size:13.5px;color:var(--txt);flex:1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topic .tcount{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .topic.active .tname{color:var(--accent)}
+
+  .dtopic{padding:6px 10px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s}
+  .dtopic:hover{background:rgba(47,107,255,.06)}
+  .dtopic .tname{font-size:12.5px;color:var(--txt);flex:1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dtopic .davail{font-size:9.5px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:6px;flex:none}
+  .dtopic .davail.yes{color:#047857;background:rgba(5,150,105,.12)}
+  .dtopic .davail.no{color:#b91c1c;background:rgba(220,38,38,.1)}
+  .dtopic .davail.na{color:var(--faint);background:var(--panel2)}
+
+
+  .catalog-group{margin-top:4px}
+  .catalog-group > .cg-head{padding:9px 10px;cursor:pointer;border-radius:10px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+  .catalog-group > .cg-head:hover{background:rgba(148,163,184,.12)}
+  .catalog-group > .cg-head .arrow{transition:.2s;font-size:9px;width:14px}
+  .catalog-group.open > .cg-head .arrow{transform:rotate(90deg)}
+  .catalog-group .cg-tbls{display:none;padding-left:8px}
+  .catalog-group.open .cg-tbls{display:block}
+  .cg-tbl{padding:6px 10px 6px 16px;font-family:var(--mono);font-size:12px;color:var(--muted);cursor:pointer;border-radius:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cg-tbl:hover{color:var(--accent);background:rgba(47,107,255,.07)}
+
+  /* ---------- CANVAS ---------- */
+  .canvas{flex:1;position:relative;min-width:0;overflow:hidden}
+  #svg{position:absolute;inset:0;width:100%;height:100%;cursor:grab}
+  #svg.dragging{cursor:grabbing}
+
+  .legend{
+    position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:15;
+    display:flex;align-items:center;gap:3px;padding:5px 10px;border-radius:999px;
+    background:rgba(255,255,255,.94);backdrop-filter:blur(12px);border:1px solid var(--line2);
+    font-size:11px;box-shadow:var(--glow);pointer-events:auto;max-width:calc(100% - 40px);
+  }
+  .legend .lg-hd{font-size:9.5px;letter-spacing:1.2px;color:var(--faint);text-transform:uppercase;font-weight:800;margin:0 6px 0 2px;white-space:nowrap}
+  .legend .z{display:flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;color:var(--muted);white-space:nowrap;cursor:default}
+  .legend .z:hover{background:var(--panel2)}
+  .legend .z i{width:9px;height:9px;border-radius:3px;flex:none;display:inline-block}
+  .legend .z .ic{display:none}
+  .legend .z b{font-weight:800;color:var(--txt);font-size:11px}
+  .legend .lgk i{width:11px;height:9px;border-radius:2px;border:1px solid rgba(0,0,0,.12)}
+  .legend .lg-sp{font-size:10px;color:var(--accent);font-weight:700;cursor:pointer;padding:2px 9px;border-radius:999px;border:1px solid rgba(47,107,255,.25);white-space:nowrap;text-decoration:none;margin-left:4px}
+  .legend .lg-sp:hover{background:rgba(47,107,255,.08)}
+
+  .hint{position:absolute;top:14px;left:14px;z-index:15;font-size:12.5px;color:var(--muted);
+    background:rgba(255,255,255,.94);padding:8px 13px;border-radius:10px;border:1px solid var(--line2);
+    backdrop-filter:blur(10px);pointer-events:none;box-shadow:var(--glow)}
+  .hint b{color:var(--accent)}
+
+  /* tooltip */
+  #tip{
+    position:absolute;z-index:50;pointer-events:none;display:none;min-width:240px;max-width:360px;
+    background:#fff;border:1px solid var(--line2);border-radius:12px;padding:13px 15px;
+    box-shadow:0 18px 50px rgba(35,64,117,.28);backdrop-filter:blur(10px);
+  }
+  #tip .tt{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:13.5px;font-weight:700;color:var(--txt);word-break:break-all}
+  #tip .tt .ticon{width:17px;height:17px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+  #tip .tt .ticon svg{width:16px;height:16px}
+  #tip .tl{font-size:12.5px;color:var(--muted);margin-top:3px}
+  #tip .tr{font-size:11.5px;color:var(--faint);margin-top:4px;font-weight:700;letter-spacing:.4px}
+  #tip .tj{font-size:11.5px;color:var(--warn);margin-top:6px;font-family:var(--mono);border-top:1px dashed var(--line2);padding-top:6px;line-height:1.5}
+  #tip .abbr{font-family:var(--mono);font-size:10px;color:var(--accent);background:rgba(47,107,255,.08);padding:1px 5px;border-radius:5px;font-weight:700;letter-spacing:.5px}
+  .qs-on .abbr{margin-left:4px}
+
+  /* ---------- DETAIL PANEL ---------- */
+  .detail{
+    position:absolute;top:0;right:0;bottom:0;width:452px;
+    background:rgba(255,255,255,.97);backdrop-filter:blur(16px);
+    border-left:1px solid var(--line);z-index:25;display:flex;flex-direction:column;
+    transform:translateX(0);transition:transform .28s cubic-bezier(.4,0,.2,1);
+  }
+  .detail.hidden{transform:translateX(105%)}
+  .detail-head{padding:17px 20px 13px;border-bottom:1px solid var(--line);flex:none}
+  .crumb{font-size:11px;color:var(--faint);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .crumb .cb{cursor:pointer;padding:3px 9px;border-radius:6px;border:1px solid var(--line2);font-size:11px;color:var(--muted);transition:.15s;background:#fff}
+  .crumb .cb:hover{color:var(--accent);border-color:var(--accent)}
+  .crumb .sep{color:var(--faint)}
+  .detail-head h2{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:18.5px;color:var(--txt);word-break:break-all;line-height:1.3}
+  .detail-head h2 .ticon{width:20px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+  .detail-head h2 .ticon svg{width:19px;height:19px}
+  .detail-head .dl{font-size:13px;color:var(--muted);margin-top:3px}
+  .detail-head .badges{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .chip{font-size:10.5px;letter-spacing:.6px;padding:4px 9px;border-radius:7px;font-weight:700;border:1px solid}
+  .chip.zone{color:#334155}
+  .chip.dict{color:var(--vio);border-color:rgba(124,58,237,.4);background:rgba(124,58,237,.08)}
+  .chip.pk{color:var(--warn);border-color:rgba(194,65,12,.4);background:rgba(194,65,12,.07)}
+  .chip.coh{color:#0f766e;border-color:rgba(5,150,105,.4);background:rgba(5,150,105,.08)}
+  .chip.hub{color:var(--vio);border-color:rgba(124,58,237,.4);background:rgba(124,58,237,.08)}
+  .chip.ext{color:var(--bad);border-color:rgba(225,29,72,.4);background:rgba(225,29,72,.07)}
+  .chip.star{color:#fff}
+  .detail-desc{font-size:13.5px;color:var(--muted);line-height:1.55;margin-top:10px}
+  .detail-body{overflow-y:auto;padding:16px 20px 40px}
+  .sec{margin-bottom:20px}
+  .sec h3{font-size:11px;letter-spacing:1.5px;color:var(--faint);text-transform:uppercase;margin-bottom:9px;font-weight:800}
+  .cols{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .colrow{display:grid;grid-template-columns:18px 1fr auto;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);align-items:center;font-size:13px}
+  .colrow:last-child{border-bottom:none}
+  .colrow:hover{background:rgba(47,107,255,.05)}
+  .colrow .pk{color:var(--warn);font-size:10px;font-weight:800;letter-spacing:1px}
+  .colrow .cn{font-family:var(--mono);color:#22304d;word-break:break-all}
+  .colrow .ct{font-size:11.5px;color:var(--faint);text-align:right;white-space:nowrap}
+  .colrow .ct .nn{color:var(--bad)}
+  .colrow .fk{font-size:10px;color:var(--vio);grid-column:2/3;font-family:var(--mono);padding-top:2px}
+
+  .keychips{display:flex;flex-wrap:wrap;gap:6px}
+  .keychip{font-family:var(--mono);font-size:11.5px;padding:4px 10px;border-radius:7px;border:1px solid var(--line2);background:var(--panel2);color:var(--txt);font-weight:600}
+  .keychip .k{color:var(--warn);font-weight:800;margin-right:6px}
+
+  .rels .rel{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border:1px solid var(--line);
+    border-radius:10px;margin-bottom:6px;font-size:13px;background:var(--panel2)}
+  .rels .rel .arr{color:var(--accent);font-family:var(--mono);font-size:13px;margin-top:1px;flex:none}
+  .rels .rel .rt{font-family:var(--mono);color:#22304d;font-weight:600}
+  .rels .rel .ron{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:3px}
+  .rels .rel .rnote{font-size:11.5px;color:var(--faint);margin-top:4px;line-height:1.4}
+  .rels .rel .rnarr{font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:5px;padding-top:5px;border-top:1px dashed var(--line2)}
+  .rels .rel .rnarr code{font-family:var(--mono);color:var(--warn);font-size:11px}
+  .rels .rel .card{font-size:10px;color:var(--warn);background:rgba(194,65,12,.07);
+    padding:2px 7px;border-radius:6px;border:1px solid rgba(194,65,12,.3);font-weight:700;margin-left:auto;flex:none}
+  .joinpath{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:12px}
+  .joinpath .jp{color:var(--muted);word-break:break-all}
+  .joinpath .jp b{color:var(--accent);font-weight:600}
+  .sqlbox{margin-top:10px;background:#f6f8fc;border:1px solid var(--line);border-radius:10px;padding:12px;overflow-x:auto}
+  .sqlbox pre{font-family:var(--mono);font-size:12px;color:#0f1e3d;white-space:pre-wrap;word-break:break-all}
+  .sqlbox .kw{color:var(--vio)}
+  .sqlbox .cm{color:#8a98b6}
+  .qref{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;border:1px solid var(--line);
+    border-radius:10px;margin-bottom:6px;font-size:13px;background:#fff;cursor:pointer;transition:.15s}
+  .qref:hover{border-color:var(--accent);background:rgba(47,107,255,.05)}
+  .qref .qi{font-family:var(--mono);font-size:11px;color:var(--accent);flex:none;margin-top:1px}
+  .qref .qt{font-size:13px;color:var(--txt);line-height:1.45;font-weight:500}
+  .focusbtn{width:100%;margin-top:14px;padding:10px;border-radius:10px;border:1px solid var(--accent);
+    background:rgba(47,107,255,.1);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;transition:.15s}
+  .focusbtn:hover{background:rgba(47,107,255,.16)}
+  .notable{font-size:13.5px;color:var(--muted);line-height:1.6}
+  .notable .cg{font-family:var(--mono);color:var(--accent)}
+  .pulse{animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* SVG styles */
+  .node{cursor:pointer}
+  .node .card{fill:#ffffff;filter:drop-shadow(0 2px 6px rgba(22,35,61,.16));transition:all .15s}
+  .node:hover .card{filter:drop-shadow(0 4px 14px rgba(22,35,61,.3))}
+  .node .hdr{transition:all .15s}
+  .node:hover .hdr{filter:brightness(1.08)}
+  .node .nm{font-family:var(--mono);font-weight:700;fill:#ffffff;pointer-events:none}
+  .node .nicon{pointer-events:none}
+  .node .key{font-family:var(--mono);fill:#7182a1;pointer-events:none}
+  .node .bdy{fill:#ffffff}
+  .node .subtl{font-weight:800;letter-spacing:.6px;fill:#fff;pointer-events:none}
+  .edge{fill:none;stroke-width:1.15;opacity:.4;transition:opacity .15s}
+  .edge.kp{stroke:#2f6bff}
+  .edge.kv{stroke:#e8860c}
+  .edge.ko{stroke:#64748b}
+  .edge.hubedge{stroke-width:1.7;stroke-dasharray:5 4}
+  .edge.sel{opacity:1;stroke-width:1.9;filter:drop-shadow(0 0 6px rgba(47,107,255,.8))}
+  .edge.dim{opacity:.06}
+  .edgelabel{font-family:var(--mono);font-weight:700;fill:#33415c;letter-spacing:.3px;
+    paint-order:stroke;stroke:#ffffff;stroke-width:4px;stroke-linejoin:round;cursor:pointer}
+  .edgelabel.kp{fill:#1e56c9}
+  .edgelabel.kv{fill:#b45309}
+  .edgelabel.ko{fill:#475569}
+  .node.dim{opacity:.1}
+  .node.hl rect{stroke:var(--accent);stroke-width:1.8}
+  .node.selected .card{stroke:var(--navy);stroke-width:2.2;filter:drop-shadow(0 0 16px rgba(47,107,255,.4))}
+  .viewlabel{font-size:12px;fill:var(--faint);font-family:var(--sans);letter-spacing:1.4px;text-transform:uppercase}
+
+  .centerpill{position:absolute;top:14px;right:14px;z-index:15;display:flex;gap:6px}
+  .cpb{padding:9px 16px;border-radius:11px;border:1px solid var(--line2);background:rgba(255,255,255,.94);
+    font-size:13px;color:var(--muted);cursor:pointer;backdrop-filter:blur(10px);transition:.15s;font-weight:700;box-shadow:var(--glow)}
+  .cpb:hover{color:var(--accent);border-color:var(--accent)}
+  .cpb.primary{background:linear-gradient(135deg,#0f2a5c,#2f6bff);color:#fff;border-color:transparent}
+  .cpb.primary:hover{filter:brightness(1.12);color:#fff}
+
+  /* Example Questions */
+  .qitem{padding:10px 10px;border-radius:10px;cursor:pointer;display:flex;gap:9px;align-items:flex-start;
+    border:1px solid var(--line);margin-bottom:6px;background:#fff;transition:.15s}
+  .qitem:hover{border-color:var(--accent);background:rgba(47,107,255,.05)}
+  .qitem .qi{font-family:var(--mono);font-size:11px;color:var(--accent);flex:none;margin-top:1px}
+  .qitem .qt{font-size:13px;color:var(--txt);line-height:1.45;font-weight:500}
+  .qitem.active{border-color:var(--accent);background:rgba(47,107,255,.08)}
+  .qstep{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);
+    background:#fff;margin-bottom:6px;font-size:12.5px}
+  .qstep .qs-idx{font-size:10px;color:var(--faint);font-family:var(--mono);flex:none}
+  .qstep .qs-tbl{font-family:var(--mono);color:#22304d;flex:none}
+  .qstep .qs-on{font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .qstep .qs-arr{color:var(--accent);margin:0 2px}
+  .edge.qpath{opacity:1;stroke-width:2.4;stroke:var(--accent);filter:drop-shadow(0 0 8px rgba(47,107,255,.5))}
+  .node.qnode .card{stroke:var(--accent);stroke-width:1.9;filter:drop-shadow(0 0 14px rgba(47,107,255,.4))}
+  .qdesc{font-size:13.5px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 26 26" fill="none">
+          <circle cx="13" cy="13" r="5" fill="#c9a227"/>
+          <path d="M13 2.2v3M13 20.8v3M2.2 13h3M20.8 13h3M5.4 5.4l2.1 2.1M18.5 18.5l2.1 2.1M20.6 5.4l-2.1 2.1M7.5 18.5l-2.1 2.1" stroke="#c9a227" stroke-width="1.9" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <h1>AKU <span class="gold">CDIO MAYO</span></h1>
+        <div class="sub">Meditech EMR · <b>Star Schema Explorer</b></div>
+      </div>
+    </div>
+    <div class="links">
+      <a href="index.html">Home</a>
+      <a href="explorer.html" class="active">Explorer</a>
+      <a href="topics.html">Topics</a>
+      <a href="sql.html">SQL Cookbook</a>
+      <a href="sps.html">SP Workspace</a>
+    </div>
+    <div class="searchwrap">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5b6f8e" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search" placeholder="Search any table or column… (17,094 tables indexed)" autocomplete="off" spellcheck="false">
+      <div class="searchbox" id="searchbox"></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="stTables">—</b>tables</div>
+      <div class="stat"><b id="stCols">—</b>columns</div>
+      <div class="stat"><b id="stDbs">3</b>databases</div>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside>
+      <div class="side-scroll">
+        <label class="vf" id="vfWrap" title="Show only source tables that carry a VisitID"><input type="checkbox" id="visitOnly"><span>Visit-grained tables only</span><b id="vfCount">67</b></label>
+        <div class="side-label">Data Topics</div>
+        <div id="topiclist"></div>
+        <div id="doctopics"></div>
+      </div>
+    </aside>
+
+    <div class="canvas" id="canvas">
+      <div class="hint"><b>Star schema</b> · drag to pan · wheel to zoom · hover a table for details · click to open the panel · <b style="color:#2f6bff">blue</b> = patient key · <b style="color:#e8860c">amber</b> = visit key</div>
+      <div class="centerpill">
+        <button class="cpb primary" id="btnClear">Reset View</button>
+      </div>
+      <div class="legend" id="legend"></div>
+      <svg id="svg"></svg>
+      <div id="tip"></div>
+    </div>
+
+    <div class="detail hidden" id="detail"></div>
+  </div>
+</div>
+
+<script src="data/schema.js?v=3"></script>
+<script>
+"use strict";
+const DATA = window.SCHEMA_DATA || {};
+const $ = (s, r=document) => r.querySelector(s);
+
+/* ============================= Data Topic Availability.docx =============================
+   Every topic + availability status + example source tables from
+   "Data Topic Availability.docx". at = AKULiveATdb tables, nd = AKULivendb tables. */
+const DOC_TOPICS = [
+  { p:"Phase 1 · Core Clinical Data", items:[
+    { t:"ADT (Admit, Discharge, Transfer)", a:"Yes", at:["AbsAccess_CoderWorklistGroups"], nd:["AdmBedDetails","AdmBedReservations","AdmVisitAppointments"] },
+    { t:"Allergies", a:"Yes", at:["CwsApptProc_AllergenRestrictions","CwsApptProc_AllergenRestrictions_AllergenText","EmrParam_Main_AllergenLabel"], nd:["AdmAllergies","DMisAllergenDrugIngredCodes","DMisAllergenDrugIngredReplaced"] },
+    { t:"Clinical Documents / Notes", a:"Yes", at:["AbsAccess_CollectionNoteAppls","AbsParam_BarCollectionNotesCats","AbsUserPref_CoderNoteTexts"], nd:["AdmVisitCollectionNotes","AdmVisitCollectionNoteText","DBbkPromptDocumentationText"] },
+    { t:"Diagnosis", a:"Yes", at:["AbsAcct_Diagnoses","AbsAcct_DiagnosesAltCodeRids","AbsAcct_DiagnosesGrouper"], nd:["AdmVisitDiagnoses","AdmVisitDiagnosesCs","AdmVisitDiagnosisAudit"] },
+    { t:"Encounter Data", a:"Yes", at:["AbsAcct_AbsAttendProviders","AbsAcct_AbsInquirySource","AbsAcct_ApcDates"], nd:["AdmVisitAppointments","AdmVisitAuthorizations","AdmVisitClinicalAlerts"] },
+    { t:"Flowsheet - Vitals", a:"Yes", at:["CpoeFlwFlowSheets","CpoeFlwFlowSheetProps","CpoeFlwVitalSigns"], nd:["AdmVisitVitals","AdmVisitVitalsAudit"] },
+    { t:"Immunizations", a:"Yes", at:["EmrPat_Immunizations","EmrPat_Immunizations_Comment"], nd:["AdmImmunizations","AdmImmunizationOrders"] },
+    { t:"Lab Results", a:"Yes", at:["LabOrd_Main","LabRes_Main","LabRes_Observation"], nd:["LabResComponent","LabResObservationText","LabSpecimen"] },
+    { t:"Medications", a:"Yes", at:["EmrAcctPha_MedOrders","EmrAcctPha_MedAdministrations","EmrAcctPha_MedComponents"], nd:["AdmMedicationOrders","AdmMAR","AdmMedAdministration"] },
+    { t:"Pathology Reports", a:"Yes", at:["PatPathologyHeader","PatPathologyResult","PatPathologyText"], nd:[] },
+    { t:"Patient Demographics", a:"Yes", at:["HimRec_Main","EmrPat_Main","EmrPat_Ids"], nd:["AdmPatient","AdmPatientIds","AdmPatientFlags"] },
+    { t:"Patient Provided Info (PPI)", a:"Yes", at:["EmrPat_SocialHistory","EmrPat_Questionnaire","EmrPat_SDOH"], nd:["AdmSocialHistory","AdmPatientQuestionnaire"] },
+    { t:"Procedures", a:"Yes", at:["AbsAcct_EpisodeProcedures","AbsAcct_OtherProcedures","EmrProcOrders"], nd:["AdmVisitProcedures","AdmSurgicalHistory"] },
+    { t:"Radiology Reports", a:"Yes", at:["EmrAcctRep_Report","EmrAcctRep_Items","RadOrderHeader"], nd:["RadReportText"] },
+    { t:"Problem List", a:"Yes", at:["EmrAcctData_VisitProblems"], nd:[] },
+  ]},
+  { p:"Phase 2 · Operational & Ancillary", items:[
+    { t:"Appointments", a:"Yes", at:["ApptSchedule","AbsAcct_ApptInfo"], nd:["AdmAppointments","AdmApptSlots"] },
+    { t:"Claims Data", a:"Yes", at:["AbsAcct_ClaimHeader","AbsAcct_ClaimLines"], nd:["AdmClaims","AdmClaimLines"] },
+    { t:"ECG & Echo", a:"Yes", at:["CardECGHeader","CardEchoStudy"], nd:[] },
+    { t:"Family Medical History", a:"Yes", at:["EmrPat_FamilyHistory"], nd:[] },
+    { t:"Infusions", a:"Yes", at:["EmrAcctPha_Infusions"], nd:[] },
+    { t:"Microbiology", a:"Yes", at:["LabRes_Micro","LabRes_Culture"], nd:["AdmMicroResults"] },
+    { t:"Patient Insurance", a:"Yes", at:["EmrPat_Insurance","PayerPlans"], nd:["AdmPatientInsurance"] },
+    { t:"Patient Provided Info (PPI)", a:"Yes", at:["EmrPat_SocialHistory","EmrPat_Questionnaire"], nd:["AdmSocialHistory","AdmPatientQuestionnaire"] },
+    { t:"Pulmonary Function Test", a:"Yes", at:["PFTStudyHeader"], nd:[] },
+    { t:"RHC Measurements", a:"Yes", at:["RHCCathHeader"], nd:[] },
+    { t:"Social History", a:"Yes", at:["EmrPat_SocialHistory"], nd:["AdmSocialHistory"] },
+    { t:"Surgical Cases", a:"Yes", at:["SurgCaseHeader","SurgCaseEvents"], nd:["AdmSurgicalCase"] },
+    { t:"Treatment Plan", a:"Yes", at:["EmrPlan_Header"], nd:[] },
+    { t:"Medication Orders", a:"Yes", at:["EmrAcctPha_MedOrders"], nd:["AdmMedicationOrders"] },
+    { t:"Procedure Orders", a:"Yes", at:["EmrProcOrders","ProcOrderHeader"], nd:["AdmProcedureOrders"] },
+  ]},
+  { p:"Phase 3 · Imaging & Diagnostics", items:[
+    { t:"DICOM Header", a:"No", note:"DICOM images live outside the Meditech relational DB (external modality).", at:[], nd:[] },
+    { t:"CT", a:"Yes", at:["RadOrderHeader","EmrAcctRep_Report"], nd:["RadReportText"] },
+    { t:"PET", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
+    { t:"MRI", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
+    { t:"Echocardiogram", a:"Yes", at:["CardEchoStudy","CardEchoFindings"], nd:[] },
+    { t:"GI - Endoscopy", a:"Yes", at:["GIEndoscopyHeader"], nd:[] },
+    { t:"Ultrasound", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
+    { t:"Cardiology (Cath) Imaging", a:"Yes", at:["CathLabHeader"], nd:[] },
+    { t:"Mammography", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
+  ]},
+  { p:"Phase 4 · Specialty & Longitudinal", items:[
+    { t:"Digital Pathology", a:"No", note:"Digital pathology images are managed by an external pathology system.", at:[], nd:[] },
+    { t:"Transfusion", a:"Yes", at:["BbkTransfusionHeader","BbkTransfusionEvents"], nd:["BbkTransfusionNotes"] },
+    { t:"OB / Delivery", a:"Yes", at:["OBDeliveryHeader","OBDeliveryEvents"], nd:[] },
+    { t:"Dermatology Imaging", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
+    { t:"Eye Imaging (Fundus, OCT)", a:"Yes", at:["OphthoImagingHeader"], nd:[] },
+    { t:"Vaccines", a:"Yes", at:["EmrPat_Immunizations"], nd:["AdmImmunizations"] },
+    { t:"Other Clinical Reports", a:"Yes", at:["EmrAcctRep_Report"], nd:["RadReportText"] },
+  ]},
+  { p:"Phase 5 · Extended & Future", items:[
+    { t:"Genomics", a:"No", note:"Genomic sequencing data lives outside the Meditech relational DB.", at:[], nd:[] },
+    { t:"Bio-repositories", a:"No", note:"Biobank/sample repositories are external systems.", at:[], nd:[] },
+    { t:"Registries", a:"Yes", at:["RegistryEnrollment"], nd:[] },
+    { t:"Electrophysiology (EEG)", a:"Yes", at:["NeuroEEGHeader"], nd:[] },
+    { t:"Orders", a:null, at:["EmrProcOrders","EmrAcctPha_MedOrders"], nd:["AdmProcedureOrders","AdmMedicationOrders"] },
+    { t:"X-Ray", a:null, at:["RadOrderHeader"], nd:["RadReportText"] },
+    { t:"Surgical Video", a:null, note:"Surgical video is captured by an external system (not in relational DB).", at:[], nd:[] },
+    { t:"Medical Device", a:null, note:"Device data comes from external medical-device sources.", at:[], nd:[] },
+  ]},
+];
+/* curated-equivalent tables for each Data Topic (see sidebar) so the
+   "Show in graph" button has real, curated tables to display even when
+   the DOCX example tables use uncurated FCAP1A source names */
+const DOC_CUR = {
+  "ADT (Admit, Discharge, Transfer)": ["tbl_FCAP1A_ADT_Extended", "AdmVisits", "AdmittingData"],
+  "Allergies": ["EmrPat_Allergies", "EmrPat_Allergies_AllrgComment", "EmrPat_ExtAllergies", "EmrPat_ExtAllergyMain", "DMisAllergies", "tbl_FCAP1A_Allergies_Extended"],
+  "Clinical Documents / Notes": ["EmrClinDoc_Main", "EmrDocData_Main", "EmrDocData_Note", "EmrDocData_NoteText_Text", "EmrPatSum_Documents", "tbl_FCAP1A_ClinicalNotes_Extended_Merged"],
+  "Diagnosis": ["AbsAcct_Diagnoses", "EmrPat_Problems", "EmrPat_ProblemsMain", "EmrPat_PendingProblems", "EmrPat_OfficeProblems", "EmrPat_HealthConcerns", "MisDx_Main", "MisCpt_Main", "tbl_FCAP1A_Diagnoses_Extended"],
+  "Encounter Data": ["AdmVisits", "AdmittingData", "AdmProviders", "AdmConsultingProviders", "RegAcct_Main", "RegAcct_CustomDataQueries_Queries", "tbl_FCAP1A_Encounters_Extended"],
+  "Flowsheet - Vitals": ["AdmVitalSigns", "EmrGrowthChartAudit_Main", "EmrGrowthChartAudit_DataPoints", "EmrGrowthSet_Main", "tbl_FCAP1A_Flowsheets_Extended"],
+  "Immunizations": ["EmrPat_Vaccines", "EmrPat_VaccinesDoses", "MisVaccine_Main", "MisImmReason_Main", "PhaRxAdminImmunizations", "tbl_FCAP1A_Immunizations_Extended"],
+  "Lab Results": ["LabSpecimenTests", "LabSpecimens", "BbkSpecimenTests", "DLabTest", "EmrPatSum_LabResults", "EmrPatSum_Items", "ItsResult", "tbl_FCAP1A_Labs_Results_Extended"],
+  "Medications": ["PhaRxMedications", "PhaRx", "PhaRxAdministrations", "DPhaDrugData", "DPhaGeneric", "EmrPat_ExtHomeMeds", "EmrPat_ExtHomeMedMain", "PhaPatData", "tbl_FCAP1A_Medications_Extended"],
+  "Pathology Reports": ["PthSpecimens", "PthSpecimenFindingsText", "PthSpecimenFinalSignouts", "PthSpecimenHistologyText", "tbl_FCAP1A_PathologyReports_Extended", "tbl_FCAP1A_PathologyEHR_Extended"],
+  "Patient Demographics": ["HimRec_Main", "HimRec_Data", "HimRec_Address", "MisRace_Main", "MisEthnicity_Main", "HimRec_AdditionalRace", "HimRec_AdditionalEthnicity", "tbl_FCAP1A_Demographics_Extended"],
+  "Patient Provided Info (PPI)": ["tbl_FCAP1A_PatientProvidedInfo_Extended"],
+  "Procedures": ["tbl_FCAP1A_Procedures_Extended"],
+  "Radiology Reports": ["tbl_FCAP1A_RadiologyReport_Extended", "EmrAcctRep_Images"],
+  "Problem List": ["EmrPat_Problems", "EmrPat_ProblemsMain", "EmrPat_PendingProblems", "EmrPat_OfficeProblems", "MisPatProblem_Main"],
+  "Family Medical History": ["EmrPat_FamilyMembers", "EmrPat_FamilyProblems", "EmrPat_FamilyMembers_DeceasedComment", "MisRelat_Main", "tbl_FCAP1A_FamilyMedicalHistory"],
+  "Microbiology": ["DMicProcs", "LabVisitIsolatedOrganisms", "MicSpecimenResultsText", "BbkSpecimenTests", "tbl_FCAP1A_Labs_Microbiology_Findings_Extended", "tbl_FCAP1A_Labs_Microbiology_Comments_Extended"],
+  "Treatment Plan": ["PcsAcct_Plans", "PcsAcct_PlanItems", "PcsAcct_Interventions", "PcsPlan_Main", "PcsAcctAct_PlanActivity", "EmrPatPlan_Problems", "tbl_FCAP1A_TreatmentPlans_Extended"],
+  "Medication Orders": ["PhaRx", "PhaRxMedications", "OmOrd_Main", "OmOrdDict_Main"],
+  "Procedure Orders": ["OmOrd_Main", "OmOrdDict_Main", "tbl_FCAP1A_Orders"],
+  "CT": ["tbl_FCAP1A_RadiologyReport_Extended"],
+  "PET": ["tbl_FCAP1A_RadiologyReport_Extended"],
+  "MRI": ["tbl_FCAP1A_RadiologyReport_Extended"],
+  "Ultrasound": ["tbl_FCAP1A_RadiologyReport_Extended"],
+  "Mammography": ["tbl_FCAP1A_RadiologyReport_Extended"],
+  "Dermatology Imaging": ["tbl_FCAP1A_RadiologyReport_Extended"],
+  "Transfusion": ["tbl_FCAP1A_Labs_BloodBank_Extended"],
+  "Vaccines": ["EmrPat_Vaccines", "EmrPat_VaccinesDoses", "MisVaccine_Main", "MisImmReason_Main"],
+  "Other Clinical Reports": ["EmrDocData_Main", "EmrPatSum_Documents", "tbl_FCAP1A_ClinicalNarrative_Extended"],
+  "Registries": ["EmrPatRegistry_Main", "EmrPatRegistry_ChronicConds", "EmrPatRegistry_LastLabResults"],
+  "Orders": ["OmOrd_Main", "OmOrdDict_Main", "OmCat_Main", "OmGrp_Main", "tbl_FCAP1A_Orders"],
+  "X-Ray": ["tbl_FCAP1A_RadiologyReport_Extended"],
+};
+function docCurated(t){
+  if (t.cur) return t.cur.filter(n => isSource(n));
+  if (DOC_CUR[t.t]) return DOC_CUR[t.t].filter(n => isSource(n));
+  return (t.at || []).concat(t.nd || []).filter(n => isSource(n));
+}
+function docAvailCls(a){ return a === "Yes" ? "yes" : a === "No" ? "no" : "na"; }
+function docAvailTxt(a){ return a === "Yes" ? "Yes" : a === "No" ? "No" : "—"; }
+
+/* ===================== SP generation plan (shared with the SP Workspace page) ===================== */
+const SPOUT = {identity:"Demographics",encounter:"Encounters",diagnosis:"Diagnoses",medication:"Medications",allergy:"Allergies",immunization:"Immunizations",lab:"Labs_Results",family:"FamilyHistory",vitals:"Flowsheets",careplan:"TreatmentPlans",registry:"Registries"};
+const SP_ZONE_ORDER = ["hub","identity","encounter","clinical","clinical_detail","dictionary"];
+const dbOf = n => n === "AdmVisits" ? "AKULivendb" : "AKULiveATdb";
+const outName = id => (SPOUT[id] || id.replace(/\b\w/g, c => c.toUpperCase())) + "_Extended";
+const spName = id => "sp_FCAP1A_" + outName(id).replace("_Extended", "");
+const hasVisitID = t => (t.cols || []).some(c => c.n === "VisitID");
+const keyFamily = on => { const s = String(on || ""); return s.includes("VisitID") ? "kv" : s.includes("PatientID") ? "kp" : "ko"; };
+const spineOf = n => /^(RegAcct_|PcsAcct|OmOrd|Pth|ItsResult|EmrAcctRep)/.test(n) ? "RegAcct_Main" : "AdmVisits";
+
+function spPlanOf(topicId){
+  const topic = DATA.topics.find(x => x.id === topicId);
+  if (!topic) return null;
+  const members = Object.values(DATA.tables).filter(t => t.topic === topicId && t.role !== "cohort")
+    .sort((a, b) => (SP_ZONE_ORDER.indexOf(a.zone) - SP_ZONE_ORDER.indexOf(b.zone)) || a.name.localeCompare(b.name));
+  if (!members.length) return null;
+  const internal = DATA.rels.filter(r => r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
+  const anchor = (members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
+  return { topic, members, internal, anchor };
+}
+
+function spValSql(p){
+  const out = outName(p.topic.id);
+  const dom = out.replace("_Extended", "");
+  const L = [];
+  L.push(`-- ============================================================`);
+  L.push(`-- SP PLAN    : ${spName(p.topic.id)}`);
+  L.push(`-- OUTPUT     : CDIO_MeditechDB.dbo.tbl_FCAP1A_${out}`);
+  L.push(`-- SOURCES    : ${p.members.length} tables (${dbOf(p.members[0].name)} + AKULivendb)`);
+  L.push(`-- ============================================================`);
+  L.push(`--`);
+  L.push(`-- (1) SOURCE HEALTH - run BEFORE the build`);
+  p.members.forEach(t => L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients FROM ${dbOf(t.name)}.dbo.${t.name};`));
+  L.push(`--`);
+  L.push(`-- (2) KEY INTEGRITY - composite SourceID + PatientID must be complete`);
+  p.members.forEach(t => L.push(`SELECT COUNT(*) AS MissingKey FROM ${dbOf(t.name)}.dbo.${t.name} WHERE SourceID IS NULL OR PatientID IS NULL;`));
+  const vis = p.members.filter(hasVisitID);
+  if (vis.length){
+    L.push(`--`);
+    L.push(`-- (2b) VISIT GRAIN - every VisitID must resolve to the encounter spine (${spineOf(vis[0].name)}.VisitID)`);
+    vis.forEach(t => { const s = spineOf(t.name); L.push(`SELECT COUNT(*) AS MissingVisit FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(s)}.dbo.${s} v ON t.SourceID=v.SourceID AND t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`); });
+  }
+  L.push(`--`);
+  L.push(`-- (3) HUB LINKAGE - no orphan rows vs ${p.anchor}`);
+  p.members.filter(t => t.name !== p.anchor).forEach(t => L.push(`SELECT COUNT(*) AS Orphans FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(p.anchor)}.dbo.${p.anchor} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE h.PatientID IS NULL;`));
+  L.push(`--`);
+  L.push(`-- (4) OUTPUT CONTRACT - run AFTER the build`);
+  L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients, COUNT(DISTINCT VisitID) AS Visits FROM CDIO_MeditechDB.dbo.tbl_FCAP1A_${out};`);
+  L.push(`--`);
+  L.push(`-- (5) CROSS-SP - this output must be a subset of the Demographics universe`);
+  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.tbl_FCAP1A_${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
+  return L.join("\n");
+}
+
+function spDomainsOfDocTopic(t){
+  const ids = new Set();
+  docCurated(t).forEach(n => { const tb = DATA.tables[n]; if (tb && tb.topic && tb.role !== "cohort") ids.add(tb.topic); });
+  return [...ids];
+}
+
+function spSectionHTML(p){
+  const vis = p.members.filter(hasVisitID);
+  const joins = p.internal.length
+    ? p.internal.map(r => `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl" style="font-size:11.5px">${esc(r.from)}</span><span class="qs-arr">→</span><span class="qs-tbl" style="font-size:11.5px">${esc(r.to)}</span><span class="qs-on">on ${esc(r.on)} · ${esc(r.card)}</span></div>`).join("")
+    : `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl">hub star</span><span class="qs-on">all tables → ${esc(p.anchor)} on SourceID + PatientID</span></div>`;
+  const spine = vis.length ? `
+    <div class="sec" style="margin-top:14px"><h3>Visit / encounter spine</h3>
+      <div class="qstep" style="padding:7px 10px"><span class="qs-tbl">AdmVisits</span><span class="qs-arr">⇄</span><span class="qs-tbl">RegAcct_Main</span><span class="qs-on">on SourceID + VisitID · 1:1 encounter spine</span></div>
+      ${vis.map(t => { const s = spineOf(t.name); return `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl">${esc(s)}</span><span class="qs-arr">→</span><span class="qs-tbl">${esc(t.name)}</span><span class="qs-on">on SourceID + VisitID · 1:N</span></div>`; }).join("")}
+    </div>` : "";
+  const tables = p.members.map(t => `<span class="chip" style="background:${p.topic.color}1f;border-color:${p.topic.color}55;color:${p.topic.color};cursor:pointer" data-sptbl="${esc(t.name)}">${esc(t.name)}</span>`).join(" ");
+  return `
+    <div class="sec" style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
+      <h3 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>SP Generation Plan</span>
+        <span class="chip" style="background:${p.topic.color}1a;border-color:${p.topic.color}55;color:${p.topic.color}">${esc(spName(p.topic.id))}</span>
+      </h3>
+      <div class="dl" style="margin-top:6px">Output: <b>CDIO_MeditechDB.dbo.tbl_FCAP1A_${esc(outName(p.topic.id))}</b> · ${p.members.length} source tables</div>
+      <div class="sqlbox" style="margin-top:10px"><div style="display:flex;flex-wrap:wrap;gap:5px">${tables}</div></div>
+      <div class="sec" style="margin-top:14px"><h3>Join plan · ${esc(p.topic.name)}</h3>${joins}</div>
+      ${spine}
+      <div class="sec" style="margin-top:14px"><h3>Quick validation · generated SQL</h3>
+        <div class="badges" style="margin:0 0 8px">
+          <span class="chip pk">${p.members.length} sources</span>
+          <span class="chip ext">${vis.length} visit-grained</span>
+          <span class="chip ext">${p.internal.length} explicit joins</span>
+        </div>
+        <div class="sqlbox"><pre>${esc(spValSql(p))}</pre></div>
+      </div>
+      <a class="focusbtn" href="sps.html#sp-${esc(p.topic.id)}" style="text-decoration:none;display:inline-block;margin-top:10px">Open full SP workspace →</a>
+    </div>`;
+}
+
+/* ============================= state ============================= */
+const state = {
+  mode: "overview",          // overview | topic | table | question | doc
+  topicId: null,
+  questionId: null,
+  focusTable: null,
+  docIds: null,
+  docName: null,
+  count: 0,
+  selected: null,
+  highlighted: null,
+  tx: 0, ty: 0, k: 1,
+};
+
+/* ============================= star-schema roles ============================= */
+const ROLE_STYLE = {
+  hub:   { color:"#7c3aed", label:"PATIENT HUB" },
+  entity:{ color:"#0284c7", label:"FACT" },
+  dict:  { color:"#d97706", label:"DIMENSION" },
+  cohort:{ color:"#059669", label:"COHORT FACT" },
+};
+const ROLE_ORDER = ["hub", "entity", "dict", "cohort"];
+
+const ICON_PATHS = {
+  hub:    '<circle cx="7" cy="4.6" r="2.1" fill="currentColor" stroke="none"/><path d="M2.8 11.4c.3-2.2 1.9-3.5 4.2-3.5s3.9 1.3 4.2 3.5" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  entity: '<path d="M2.7 1.7h5l3.4 3.4v7.2H2.7z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7.7 1.7v3.4h3.4" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M4.7 8.6h4.6M4.7 11h4.6" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/>',
+  dict:   '<path d="M2.2 11.2a1.6 1.6 0 0 1 1.6-1.6H11.8V2.6H3.8A1.6 1.6 0 0 0 2.2 4.2z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.2 11.2A1.6 1.6 0 0 0 3.8 12.8H11.8V9.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.4 5.4h4.8" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>',
+  cohort: '<ellipse cx="7" cy="4.6" rx="4.4" ry="1.9" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.6 4.6v4.2c0 1 2 1.9 4.4 1.9s4.4-.9 4.4-1.9V4.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.6 8.8v.8c0 1 2 1.9 4.4 1.9s4.4-.9 4.4-1.9v-.8" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+};
+function iconSvg(role, size){
+  const s = size || 16;
+  return `<svg viewBox="0 0 14 14" width="${s}" height="${s}" fill="none" stroke="currentColor" style="color:inherit">${ICON_PATHS[role] || ICON_PATHS.entity}</svg>`;
+}
+
+/* ============================= helpers ============================= */
+const ctx = { w: 2900, h: 2900, cx: 1450, cy: 1450 };
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* join-key shorthand shown on the arrows (hover reveals the full key) */
+const KEY_ABBR = {
+  "PatientID": "PI", "VisitID": "VI", "AccountID": "ACI", "AdmitID": "ADI",
+  "EncounterID": "ECI", "OrderID": "OI", "OrderId": "OI", "DiagnosisID": "DI",
+  "AllergenID": "AI", "VaccineID": "VCI", "VaccineEventID": "VEI",
+  "SourceID": "SI", "MemberNumberID": "MN", "FamilyProblemMemberID": "FPM",
+  "FamilyProblemCodeID": "FPC", "PanelID": "PA", "EmrIdID": "EI",
+  "ProblemDiagnosisCode_MisDxID": "DX", "ProblemDictionaryOid_MisPatProblemID": "PP",
+  "HealthConcernCodes": "HC", "UnvUserID": "USR", "MisDxID": "DX",
+  "MisPatProblemID": "PP", "MisEthnicityID": "ETH", "MisRaceID": "RCE",
+  "MisSexID": "SEX", "MisLangID": "LANG", "MisMrdID": "MRD",
+  "MisCntryID": "CTY", "MisRelatID": "REL", "MisReligID": "RLG",
+  "MisVaccineID": "VAC", "MisImmReasonID": "IMMR", "MisFacID": "FAC",
+  "MisSpecID": "SPEC", "MisSvcID": "SVC", "MisCptID": "CPT",
+  "MisEduLvlID": "EDU", "MisMaritalStatusID": "MAR", "MisAdmitSourceID": "ASRC",
+  "MisProviderID": "PROV", "MisProviderGroupID": "GRP", "MisProviderTypeID": "PTYP",
+};
+function keyAbbr(on){
+  return String(on).split(/ ?[+=] ?/).map(k => KEY_ABBR[k] || k).join(" + ");
+}
+function keyFull(on){ return String(on); }
+function roleLabel(t){ return DATA.role_label[t.role] || t.role.toUpperCase(); }
+function roleOf(t){ return ROLE_STYLE[t.role] ? t.role : "entity"; }
+function roleStyle(t){ return ROLE_STYLE[roleOf(t)]; }
+function topicOf(t){ return DATA.topics.find(x => x.id === t.topic); }
+
+function splitName(name, compact){
+  if (compact){
+    /* overview keeps cards small: at most 2 lines of <=9 chars each */
+    if (name.length <= 9) return [name];
+    let i = name.lastIndexOf("_", 9);
+    if (i < 4) i = 9;
+    let a = name.slice(0, i), b = name.slice(i + 1);
+    if (a.length > 9) a = a.slice(0, 9);
+    if (b.length > 9) b = b.slice(0, 9);
+    return [a, b];
+  }
+  const cfg = sizeConfig();
+  const limit = Math.max(12, Math.floor((cfg.maxW - cfg.pad) / cfg.cw));
+  if (name.length <= limit) return [name];
+  const i = name.lastIndexOf("_", limit);
+  if (i > 5) return [name.slice(0, i), name.slice(i + 1)];
+  return [name.slice(0, limit), name.slice(limit)];
+}
+
+/* split every curated table into one-hop neighbours for graph layout.
+   FCAP1A cohort/pipeline tables (role "cohort") are stored-procedure OUTPUTS;
+   they are excluded from the page-1 star schema (see sps.html for the SPs). */
+const isSource = n => DATA.tables[n] && DATA.tables[n].role !== "cohort";
+const curatedIds = Object.keys(DATA.tables);
+const relByFrom = {}, relByTo = {};
+DATA.rels.forEach(r => {
+  if (!isSource(r.from) || !isSource(r.to)) return;
+  (relByFrom[r.from] = relByFrom[r.from] || []).push(r);
+  (relByTo[r.to] = relByTo[r.to] || []).push(r);
+});
+function neighbors(id){
+  const set = new Set();
+  (relByFrom[id] || []).forEach(r => set.add(r.to));
+  (relByTo[id] || []).forEach(r => set.add(r.from));
+  return set;
+}
+
+/* ============================= layout ============================= */
+let pos = {};
+
+function buildOverviewPositions(){
+  pos = {};
+  const cx = 1100, cy = 1000;
+  const hub = "HimRec_Main";
+  pos[hub] = { x: cx, y: cy };
+
+  /* interleave roles so entity/dict share one ring system (no cohort here) */
+  const byRole = { entity: [], dict: [], cohort: [] };
+  Object.keys(DATA.tables).forEach(n => {
+    if (n === hub) return;
+    if (!isSource(n)) return;
+    const r = DATA.tables[n].role;
+    (byRole[r] || byRole.entity).push(n);
+  });
+  const mixed = [];
+  const maxLen = Math.max(byRole.entity.length, byRole.dict.length, byRole.cohort.length);
+  for (let i = 0; i < maxLen; i++){
+    ["entity", "dict", "cohort"].forEach(r => {
+      if (i < byRole[r].length) mixed.push(byRole[r][i]);
+    });
+  }
+  /* ring pitch 114 and radial step 122 both exceed the max card size
+     (94x38); flat 0.55 keeps the compressed ring-to-ring y-gap >= 38 so
+     no two cards can overlap and the hub zone stays clear */
+  placeRings(mixed, cx, cy, 150, 114, 122, 0.55);
+}
+
+/* place cards on concentric rings; within-ring angular pitch and ring
+   spacing are both guaranteed to exceed card size, so nothing overlaps */
+function placeRings(list, cx, cy, rStart, pitch, step, flat){
+  let r = rStart, idx = 0, ringN = 0;
+  while (idx < list.length){
+    const cap = Math.max(4, Math.floor((2 * Math.PI * r) / pitch));
+    const ring = list.slice(idx, idx + cap);
+    const rot = (ringN % 2 === 1) ? Math.PI / Math.max(1, ring.length) : 0;
+    ring.forEach((name, i) => {
+      const a = -Math.PI / 2 + rot + (i / Math.max(1, ring.length)) * Math.PI * 2;
+      pos[name] = { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r * flat };
+    });
+    idx += ring.length;
+    r += step;
+    ringN++;
+  }
+  return r;
+}
+
+function buildTopicPositions(topicId){
+  pos = {};
+  const topic = DATA.topics.find(t => t.id === topicId);
+  const members = Object.keys(DATA.tables).filter(n =>
+    isSource(n) && DATA.tables[n].topic === topicId && n !== "HimRec_Main");
+  const hub = "HimRec_Main";
+  pos[hub] = { x: ctx.cx, y: ctx.cy };
+  const dicts = [];
+  const conns = [...members, "HimRec_Main"];
+  conns.forEach(m => {
+    (relByFrom[m] || []).forEach(r => {
+      if (DATA.tables[r.to] && DATA.tables[r.to].role === "dict" && !dicts.includes(r.to) && r.to !== hub) dicts.push(r.to);
+    });
+  });
+  const linked = [];
+  if (topicId === "pipeline"){
+    members.forEach(m => {
+      (relByFrom[m] || []).forEach(r => {
+        const t = DATA.tables[r.to];
+        if (t && !members.includes(r.to) && !dicts.includes(r.to) && !linked.includes(r.to) && r.to !== hub) linked.push(r.to);
+      });
+      (relByTo[m] || []).forEach(r => {
+        const t = DATA.tables[r.from];
+        if (t && !members.includes(r.from) && !dicts.includes(r.from) && !linked.includes(r.from) && r.from !== hub) linked.push(r.from);
+      });
+    });
+  }
+  window.__linkedIds = linked;
+  const ring1 = members.filter(m => !dicts.includes(m) && !linked.includes(m));
+  const nTotal = ring1.length + dicts.length + linked.length + 1;
+  const prevMode = state.mode;
+  state.mode = "topic"; state.count = nTotal;
+  const cfg = sizeConfig();
+  state.mode = prevMode;
+  const cardW = cfg.maxW;
+  const cardH = cfg.hd + cfg.lineH + cfg.bd;      /* worst case (2 lines) */
+  const flat = 0.6;
+  const pitch = cardW + 34;                        /* within-ring arc spacing */
+  const sep = cardW + 44;                          /* ring-to-ring radial gap */
+  const cx = ctx.cx, cy = ctx.cy;
+  /* members ring: radius large enough to hold all members at `pitch` and
+     clear of the centre hub; the ellipse (flat) shrinks the vertical span
+     so fitToExtent can scale the whole topic view up */
+  const r1 = Math.max(300, (ring1.length * pitch) / (Math.PI * 2));
+  const start = -Math.PI / 2;
+  ring1.forEach((m, i) => {
+    const a = start + (i / Math.max(1, ring1.length)) * Math.PI * 2;
+    pos[m] = { x: cx + Math.cos(a) * r1, y: cy + Math.sin(a) * r1 * flat };
+  });
+  const r2 = r1 + sep;
+  dicts.forEach((m, i) => {
+    const a = start + (i / Math.max(1, dicts.length)) * Math.PI * 2;
+    pos[m] = { x: cx + Math.cos(a) * r2, y: cy + Math.sin(a) * r2 * flat };
+  });
+  const r3 = r2 + sep;
+  linked.forEach((m, i) => {
+    const a = start + (i / Math.max(1, linked.length)) * Math.PI * 2;
+    pos[m] = { x: cx + Math.cos(a) * r3, y: cy + Math.sin(a) * r3 * flat };
+  });
+  return { topic, members, dicts, linked };
+}
+
+function buildQuestionPositions(qid){
+  pos = {};
+  const q = DATA.questions.find(x => x.id === qid);
+  if (!q) return;
+  const chain = q.path.filter(isSource);
+  const n = chain.length;
+  const r = Math.min(620, 300 + n * 90);
+  chain.forEach((name, i) => {
+    const a = -Math.PI / 2 + (i / Math.max(1, n)) * Math.PI * 2;
+    pos[name] = { x: ctx.cx + Math.cos(a) * r, y: ctx.cy + Math.sin(a) * r * 0.6 };
+  });
+}
+
+function buildTablePositions(name){
+  pos = {};
+  const n = neighbors(name);
+  n.add(name);
+  const hub = "HimRec_Main";
+  if (n.has(hub)) pos[hub] = { x: ctx.cx, y: ctx.cy };
+  const others = [...n].filter(x => x !== hub);
+  const r = Math.max(300, Math.min(760, 300 + others.length * 34));
+  const start = -Math.PI / 2;
+  others.forEach((m, i) => {
+    const a = start + (i / Math.max(1, others.length)) * Math.PI * 2;
+    pos[m] = { x: ctx.cx + Math.cos(a) * r, y: ctx.cy + Math.sin(a) * r * 0.6 };
+  });
+  return others;
+}
+
+function buildDocPositions(){
+  pos = {};
+  const ids = state.docIds || new Set();
+  const hub = "HimRec_Main";
+  if (ids.has(hub)) pos[hub] = { x: ctx.cx, y: ctx.cy };
+  const others = [...ids].filter(x => x !== hub);
+  const r = Math.max(300, Math.min(600, 300 + others.length * 24));
+  const start = -Math.PI / 2;
+  others.forEach((m, i) => {
+    const a = start + (i / Math.max(1, others.length)) * Math.PI * 2;
+    pos[m] = { x: ctx.cx + Math.cos(a) * r, y: ctx.cy + Math.sin(a) * r * 0.6 };
+  });
+}
+
+/* ============================= SVG render ============================= */
+let svg, root;
+const W = 2900, H = 2900;
+
+/* adaptive card sizing: overview stays small for 184 nodes; the focused
+   views (few nodes) render much larger text and detail cards */
+function sizeConfig(){
+  if (state.mode === "overview") return { font: 11.5, cw: 6.9, lineH: 12, hd: 24, bd: 2, minW: 84, maxW: 94, pad: 32 };
+  const n = state.count || 1;
+  if (n <= 8)  return { font: 17,   cw: 10.2, lineH: 18, hd: 30, bd: 24, minW: 190, maxW: 260, pad: 44 };
+  if (n <= 16) return { font: 15,   cw: 9.0,  lineH: 16, hd: 28, bd: 24, minW: 170, maxW: 235, pad: 42 };
+  return         { font: 13,   cw: 7.8,  lineH: 14, hd: 26, bd: 22, minW: 150, maxW: 205, pad: 40 };
+}
+
+function nodeSize(name){
+  const compact = state.mode === "overview";
+  const cfg = sizeConfig();
+  const lines = splitName(name, compact);
+  const wl = Math.max(...lines.map(l => l.length));
+  const w = Math.min(cfg.maxW, Math.max(cfg.minW, wl * cfg.cw + cfg.pad));
+  const hd = cfg.hd + (lines.length - 1) * cfg.lineH;
+  return { w, h: hd + cfg.bd, lines, hd, bd: cfg.bd, compact, lineH: cfg.lineH, font: cfg.font };
+}
+
+function joinKeyOf(name){
+  const t = DATA.tables[name];
+  if (!t) return "PatientID";
+  if (t.pk && t.pk.length) return t.pk.join(" + ");
+  const c = (t.cols || []).find(c => /id$/i.test(c.n) && !c.fk);
+  return c ? c.n : "PatientID";
+}
+
+function visibleIds(){
+  const vf = document.getElementById("visitOnly");
+  const onlyVisit = vf && vf.checked;
+  const filt = s => { if (!onlyVisit) return s; return new Set([...s].filter(n => hasVisitID(DATA.tables[n]))); };
+  if (state.mode === "overview") return filt(new Set(Object.keys(DATA.tables).filter(isSource)));
+  if (state.mode === "doc") return filt(new Set([...(state.docIds || [])].filter(isSource)));
+  if (state.mode === "topic"){
+    const s = new Set(Object.keys(DATA.tables).filter(n => isSource(n) && DATA.tables[n].topic === state.topicId));
+    (window.__linkedIds || []).forEach(n => { if (isSource(n)) s.add(n); });
+    return filt(s);
+  }
+  if (state.mode === "table"){
+    const s = new Set([...neighbors(state.focusTable)].filter(isSource)); s.add(state.focusTable); return s;
+  }
+  if (state.mode === "question"){
+    const q = DATA.questions.find(x => x.id === state.questionId);
+    const s = new Set();
+    if (q) q.path.forEach(n => { if (isSource(n)) s.add(n); });
+    return s;
+  }
+  return new Set();
+}
+
+function render(){
+  svg = $("#svg");
+  svg.innerHTML = "";
+  const NS = "http://www.w3.org/2000/svg";
+  svg.setAttribute("data-mode", state.mode);
+  root = document.createElementNS(NS, "g");
+  svg.appendChild(root);
+  root.setAttribute("transform", `translate(${state.tx} ${state.ty}) scale(${state.k})`);
+
+  const ids = visibleIds();
+
+  /* ----- edges ----- */
+  const defs = document.createElementNS(NS, "defs");
+  const marker = document.createElementNS(NS, "marker");
+  marker.setAttribute("id", "arrow"); marker.setAttribute("viewBox", "0 0 10 10");
+  marker.setAttribute("refX", "9"); marker.setAttribute("refY", "5");
+  marker.setAttribute("markerWidth", "5.5"); marker.setAttribute("markerHeight", "5.5");
+  marker.setAttribute("orient", "auto");
+  const mpath = document.createElementNS(NS, "path");
+  mpath.setAttribute("d", "M0 0 L10 5 L0 10 z");
+  mpath.setAttribute("fill", "#94a3b8");
+  marker.appendChild(mpath);
+  defs.appendChild(marker);
+  root.appendChild(defs);
+
+  const drawn = new Set();
+  const isHub = id => id === "HimRec_Main";
+
+  DATA.rels.forEach(r => {
+    const a = r.from, b = r.to;
+    if (!isSource(a) || !isSource(b)) return;
+    if (!ids.has(a) || !ids.has(b)) return;
+    if (drawn.has(a + "|" + b) || drawn.has(b + "|" + a)) return;
+    drawn.add(a + "|" + b);
+    const pa = pos[a], pb = pos[b];
+    if (!pa || !pb) return;
+    const path = document.createElementNS(NS, "path");
+    const isHubEdge = isHub(a) || isHub(b);
+    const source = isHub(a) ? b : a;
+    const target = isHub(b) ? a : b;
+    const dx = pb.x - pa.x, dy = pb.y - pa.y;
+    const midx = (pa.x + pb.x) / 2, midy = (pa.y + pb.y) / 2;
+    const bend = isHubEdge ? 0 : 22;
+    const nrm = Math.hypot(dx, dy) || 1;
+    const cx = midx - (dy / nrm) * bend, cy = midy + (dx / nrm) * bend;
+    path.setAttribute("d", `M ${pa.x} ${pa.y} Q ${cx} ${cy} ${pb.x} ${pb.y}`);
+    path.setAttribute("class", "edge " + (isHubEdge ? "kp hubedge" : keyFamily(r.on)));
+    if (isHubEdge) path.setAttribute("stroke-width", "1.6");
+    path.setAttribute("data-a", a); path.setAttribute("data-b", b);
+    path.setAttribute("data-card", r.card);
+    path.setAttribute("data-on", r.on);
+    if (!isHubEdge) path.setAttribute("marker-end", "url(#arrow)");
+    root.appendChild(path);
+
+    /* join-key initials on the arrow (focused views only): PI, VI, DI …
+       hover reveals the full key name in the tooltip */
+    if (!isHubEdge && state.mode !== "overview" && r.on){
+      const lbl = document.createElementNS(NS, "text");
+      const cf = sizeConfig();
+      lbl.setAttribute("x", midx);
+      lbl.setAttribute("y", midy - 3);
+      lbl.setAttribute("text-anchor", "middle");
+      lbl.setAttribute("class", "edgelabel " + keyFamily(r.on));
+      lbl.setAttribute("font-size", Math.max(9, Math.round(cf.font * 0.52)));
+      lbl.setAttribute("data-a", a); lbl.setAttribute("data-b", b);
+      lbl.setAttribute("data-on", r.on);
+      lbl.textContent = keyAbbr(r.on);
+      root.appendChild(lbl);
+    }
+  });
+
+  /* question join-path edges (drawn over the curated graph) */
+  if (state.mode === "question" && state.questionId){
+    const q = DATA.questions.find(x => x.id === state.questionId);
+    if (q){
+      const chain = q.path.filter(isSource);
+      chain.forEach((n, i) => {
+        if (i === 0) return;
+        const a = chain[i-1], b = n;
+        if (!ids.has(a) || !ids.has(b)) return;
+        const pa = pos[a], pb = pos[b];
+        if (!pa || !pb) return;
+        const path = document.createElementNS(NS, "path");
+        const dx = pb.x - pa.x, dy = pb.y - pa.y;
+        const midx = (pa.x + pb.x) / 2, midy = (pa.y + pb.y) / 2;
+        const nrm = Math.hypot(dx, dy) || 1;
+        const bend = isHub(a) || isHub(b) ? 0 : 28;
+        const cx = midx - (dy / nrm) * bend, cy = midy + (dx / nrm) * bend;
+        path.setAttribute("d", `M ${pa.x} ${pa.y} Q ${cx} ${cy} ${pb.x} ${pb.y}`);
+        path.setAttribute("class", "edge qpath");
+        path.setAttribute("marker-end", "url(#arrow)");
+        root.appendChild(path);
+      });
+    }
+  }
+
+  /* ----- nodes ----- */
+  ids.forEach(name => {
+    const t = DATA.tables[name];
+    const p = pos[name];
+    if (!p || !t) return;
+    const { w, h, lines, hd, compact, lineH, font } = nodeSize(name);
+    const st = roleStyle(t);
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "node");
+    g.setAttribute("data-id", name);
+    g.setAttribute("transform", `translate(${p.x - w/2} ${p.y - h/2})`);
+
+    /* soft halo behind the patient hub */
+    if (t.role === "hub"){
+      const halo = document.createElementNS(NS, "circle");
+      halo.setAttribute("cx", w / 2); halo.setAttribute("cy", h / 2);
+      halo.setAttribute("r", w * 0.66);
+      halo.setAttribute("fill", "rgba(124,58,237,.07)");
+      halo.setAttribute("stroke", "rgba(124,58,237,.35)");
+      halo.setAttribute("stroke-dasharray", "2 5");
+      halo.setAttribute("stroke-width", "1.4");
+      g.appendChild(halo);
+    }
+
+    /* card outline */
+    const card = document.createElementNS(NS, "rect");
+    card.setAttribute("width", w); card.setAttribute("height", h);
+    card.setAttribute("rx", 9);
+    card.setAttribute("class", "card");
+    card.setAttribute("stroke", st.color);
+    card.setAttribute("stroke-width", 1.5);
+    g.appendChild(card);
+
+    /* coloured header bar */
+    const hdr = document.createElementNS(NS, "rect");
+    hdr.setAttribute("width", w); hdr.setAttribute("height", hd);
+    hdr.setAttribute("rx", 9);
+    hdr.setAttribute("class", "hdr");
+    hdr.setAttribute("fill", st.color);
+    g.appendChild(hdr);
+    /* square the header's bottom corners with the white body */
+    const body = document.createElementNS(NS, "rect");
+    body.setAttribute("x", 0); body.setAttribute("y", hd - 2);
+    body.setAttribute("width", w); body.setAttribute("height", h - hd + 2);
+    body.setAttribute("class", "bdy");
+    body.setAttribute("fill", "#ffffff");
+    g.appendChild(body);
+
+    /* role icon */
+    const ic = document.createElementNS(NS, "g");
+    ic.setAttribute("class", "nicon");
+    ic.setAttribute("transform", `translate(8 ${hd/2 - 7})`);
+    ic.setAttribute("stroke", "#ffffff");
+    ic.setAttribute("fill", "#ffffff");
+    ic.innerHTML = ICON_PATHS[roleOf(t)];
+    g.appendChild(ic);
+
+    /* table name */
+    lines.forEach((ln, i) => {
+      const te = document.createElementNS(NS, "text");
+      te.setAttribute("x", 22);
+      te.setAttribute("y", hd/2 - (lines.length - 1) * (lineH / 2) + lineH * 0.34 + i * lineH);
+      te.setAttribute("class", "nm");
+      te.setAttribute("font-size", font);
+      te.textContent = ln;
+      g.appendChild(te);
+    });
+
+    /* join key footer (overview mode keeps compact header-only cards) */
+    if (!compact){
+      const key = document.createElementNS(NS, "text");
+      key.setAttribute("x", w / 2);
+      key.setAttribute("y", hd + (lineH * 0.72));
+      key.setAttribute("text-anchor", "middle");
+      key.setAttribute("class", "key");
+      key.setAttribute("font-size", Math.max(9, Math.round(font * 0.72)));
+      key.textContent = joinKeyOf(name);
+      g.appendChild(key);
+    }
+
+    /* role tag on the right of the header (hub only) */
+    if (t.role === "hub"){
+      const tag = document.createElementNS(NS, "text");
+      tag.setAttribute("x", w - 8);
+      tag.setAttribute("y", hd/2 + 3.5);
+      tag.setAttribute("text-anchor", "end");
+      tag.setAttribute("class", "subtl");
+      tag.setAttribute("font-size", Math.max(9, Math.round(font * 0.62)));
+      tag.textContent = "HUB";
+      g.appendChild(tag);
+    }
+
+    root.appendChild(g);
+  });
+
+  /* view label */
+  if (state.mode === "topic" || state.mode === "table" || state.mode === "question" || state.mode === "doc"){
+    const vl = document.createElementNS(NS, "text");
+    vl.setAttribute("class", "viewlabel");
+    vl.setAttribute("x", ctx.cx); vl.setAttribute("y", 80);
+    vl.setAttribute("text-anchor", "middle");
+    vl.textContent = state.mode === "topic"
+      ? "Data Topic · " + (DATA.topics.find(x => x.id === state.topicId) || {}).name
+      : state.mode === "question"
+        ? "Example Question · " + ((DATA.questions.find(x => x.id === state.questionId) || {}).q)
+        : state.mode === "doc"
+          ? "Data Topic Availability · curated tables"
+          : "Neighbourhood · " + state.focusTable;
+    root.appendChild(vl);
+  }
+
+  if (state.selected){
+    const g = root.querySelector(`.node[data-id="${state.selected}"]`);
+    if (g) g.classList.add("selected");
+  }
+  if (state.mode === "question" && state.questionId){
+    const q = DATA.questions.find(x => x.id === state.questionId);
+    if (q) q.path.forEach(n => {
+      const g = root.querySelector(`.node[data-id="${n}"]`);
+      if (g) g.classList.add("qnode");
+    });
+  }
+  applyHover();
+}
+
+function applyHover(){
+  if (!state.highlighted) return;
+  const h = state.highlighted;
+  const n = neighbors(h); n.add(h);
+  root.querySelectorAll(".node").forEach(g => {
+    const id = g.getAttribute("data-id");
+    if (!n.has(id)) g.classList.add("dim");
+  });
+  root.querySelectorAll(".edge").forEach(e => {
+    const a = e.getAttribute("data-a"), b = e.getAttribute("data-b");
+    const on = a === h || b === h;
+    if (!on) e.classList.add("dim");
+    if (a === h || b === h) e.classList.add("sel");
+  });
+}
+
+function clearHover(){
+  root.querySelectorAll(".node.dim").forEach(g => g.classList.remove("dim"));
+  root.querySelectorAll(".edge.dim").forEach(e => e.classList.remove("dim"));
+  root.querySelectorAll(".edge.sel").forEach(e => e.classList.remove("sel"));
+}
+
+/* ============================= interaction ============================= */
+let drag = { on: false, sx: 0, sy: 0, tx: 0, ty: 0 };
+
+function attachSvgEvents(){
+  const svgEl = $("#svg");
+  svgEl.addEventListener("mousedown", e => {
+    if (e.target.closest(".node")) return;
+    drag.on = true; drag.sx = e.clientX; drag.sy = e.clientY;
+    drag.tx = state.tx; drag.ty = state.ty;
+    svgEl.classList.add("dragging");
+  });
+  window.addEventListener("mousemove", e => {
+    if (!drag.on) return;
+    state.tx = drag.tx + (e.clientX - drag.sx);
+    state.ty = drag.ty + (e.clientY - drag.sy);
+    applyTransform();
+  });
+  window.addEventListener("mouseup", () => { drag.on = false; $("#svg").classList.remove("dragging"); });
+  svgEl.addEventListener("wheel", e => {
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    state.k = Math.min(3.2, Math.max(0.2, state.k * f));
+    applyTransform();
+  }, { passive: false });
+
+  svgEl.addEventListener("mousemove", e => {
+    const nd = e.target.closest(".node");
+    const lbl = e.target.closest(".edgelabel");
+    const ed = e.target.closest(".edge");
+    if (nd){
+      const id = nd.getAttribute("data-id");
+      showTip(e, id, "node");
+      if (state.highlighted !== id){
+        clearHover();
+        state.highlighted = id;
+        applyHover();
+      }
+    } else if (lbl){
+      showTip(e, lbl.getAttribute("data-a") + "|" + lbl.getAttribute("data-b"), "edge");
+    } else if (ed){
+      const a = ed.getAttribute("data-a"), b = ed.getAttribute("data-b");
+      showTip(e, a + "|" + b, "edge");
+    } else {
+      $("#tip").style.display = "none";
+      clearHover();
+      state.highlighted = null;
+    }
+  });
+
+  svgEl.addEventListener("click", e => {
+    const nd = e.target.closest(".node");
+    if (nd) selectTable(nd.getAttribute("data-id"));
+  });
+}
+
+function applyTransform(){
+  root.setAttribute("transform", `translate(${state.tx} ${state.ty}) scale(${state.k})`);
+}
+
+function fitToExtent(){
+  const cw = $("#svg").clientWidth, ch = $("#svg").clientHeight;
+  if (!cw || !ch) return;
+  let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9, has = false;
+  Object.values(pos).forEach(p => {
+    if (p && typeof p.x === "number"){ has = true;
+      if (p.x < minx) minx = p.x; if (p.x > maxx) maxx = p.x;
+      if (p.y < miny) miny = p.y; if (p.y > maxy) maxy = p.y; }
+  });
+  if (!has) return;
+  const cfg = sizeConfig();
+  const pad = Math.max(70, cfg.maxW / 2 + 20);
+  const w = maxx - minx + pad * 2, h = maxy - miny + pad * 2;
+  const k = Math.min(cw / w, ch / h);
+  const cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
+  state.k = Math.max(0.18, Math.min(1.5, k));
+  state.tx = cw / 2 - cx * state.k;
+  state.ty = ch / 2 - cy * state.k;
+}
+
+function clientToSvg(clientX, clientY){
+  const rect = $("#svg").getBoundingClientRect();
+  const vx = (clientX - rect.left);
+  const vy = (clientY - rect.top);
+  const sx = (vx - state.tx) / state.k;
+  const sy = (vy - state.ty) / state.k;
+  return { x: sx, y: sy };
+}
+
+function showTip(e, key, kind){
+  const tip = $("#tip");
+  if (kind === "node"){
+    const t = DATA.tables[key];
+    const st = roleStyle(t);
+    const top = topicOf(t);
+    const docs = (t.desc || "").split(". ")[0].trim() + (t.desc ? "." : "");
+    tip.innerHTML =
+      `<div class="tt"><span class="ticon" style="color:${st.color}">${iconSvg(roleOf(t))}</span><span>${esc(t.name)}</span></div>
+       <div class="tl">${esc(t.label)}</div>
+       <div class="tr">${esc(st.label)} · ${esc(top ? top.name : "")} · ${esc(roleLabel(t))}</div>
+       ${docs ? `<div class="tj">${esc(docs)}</div>` : ""}
+       ${key === "HimRec_Main" ? `<div class="tj">universal join key: PatientID (+SourceID)</div>` : ""}`;
+  } else {
+    const [a, b] = key.split("|");
+    let r = DATA.rels.find(r => (r.from === a && r.to === b) || (r.from === b && r.to === a));
+    if (!r) r = { card: "1:N", on: "PatientID", note: "" };
+    const dir = r.from === a ? `${a} → ${b}` : `${b} → ${a}`;
+    const onTxt = String(r.on || "PatientID");
+    tip.innerHTML =
+      `<div class="tt"><span>${esc(dir)}</span></div>
+       <div class="tr">join key <b>${esc(onTxt)}</b> · <span class="abbr">${esc(keyAbbr(onTxt))}</span></div>
+       <div class="tr">cardinality ${esc(r.card)}</div>
+       ${r.note ? `<div class="tj">${esc(r.note)}</div>` : ""}`;
+  }
+  tip.style.display = "block";
+  const r = $("#svg").getBoundingClientRect();
+  let x = e.clientX - r.left + 16, y = e.clientY - r.top + 14;
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  if (x + tw > r.width - 8) x = e.clientX - r.left - tw - 10;
+  if (y + th > r.height - 8) y = e.clientY - r.top - th - 10;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+
+/* ============================= detail panel ============================= */
+function escHtml(s){ return esc(s); }
+
+function joinPath(from, to){
+  if (from === to) return [from];
+  const prev = {}; const seen = new Set([from]); const q = [from];
+  while (q.length){
+    const cur = q.shift();
+    const ns = neighbors(cur);
+    for (const n of ns){
+      if (seen.has(n)) continue;
+      seen.add(n); prev[n] = cur; q.push(n);
+      if (n === to){
+        const path = [to]; let c = to;
+        while (c !== from){ c = prev[c]; path.unshift(c); }
+        return path;
+      }
+    }
+  }
+  return [from, to];
+}
+
+function relBetween(a, b){
+  return DATA.rels.find(r => (r.from === a && r.to === b) || (r.from === b && r.to === a));
+}
+
+function joinNarrative(r, name){
+  const other = r.from === name ? r.to : r.from;
+  const cardTxt = r.card === "1:N" ? "one-to-many" : r.card === "1:1" ? "one-to-one" : String(r.card);
+  const onTxt = String(r.on);
+  if (r.from === name){
+    return `This table feeds <b>${esc(other)}</b> — a <b>${cardTxt}</b> relation joined on <code>${esc(onTxt)}</code>.`;
+  }
+  return `Referenced by <b>${esc(other)}</b> — a <b>${cardTxt}</b> relation joined on <code>${esc(onTxt)}</code>.`;
+}
+
+function renderDetail(name, viaTopic){
+  const t = DATA.tables[name];
+  const top = topicOf(t);
+  const detail = $("#detail");
+  const st = roleStyle(t);
+  const db = t.db || (t.name === "AdmVisits" ? "AKULivendb"
+    : (t.role === "cohort" ? "CDIO_MeditechDB" : "AKULiveATdb"));
+  const zz = DATA.zones[t.zone];
+
+  const crumb = `
+    <div class="crumb">
+      <span class="cb" data-crumb="overview">Overview</span>
+      <span class="sep">/</span>
+      <span class="cb" data-crumb="topic">${esc(top ? top.name : "")}</span>
+      <span class="sep">/</span>
+      <span class="cb cur">${esc(t.name)}</span>
+    </div>`;
+
+  let badges = `
+    <span class="chip star" style="background:${st.color};border-color:${st.color}">${esc(st.label)}</span>
+    <span class="chip ext">${esc(db)}</span>`;
+  if (t.pk) badges += `<span class="chip pk">PK ${esc(t.pk.join(", "))}</span>`;
+
+  /* key columns */
+  const keyCols = (t.cols || []).filter(c => (t.pk || []).includes(c.n) || c.nn || c.fk);
+  let keyChips = "";
+  keyCols.forEach(c => {
+    const tag = (t.pk || []).includes(c.n) ? "PK" : (c.fk ? "FK" : "NN");
+    keyChips += `<span class="keychip"><span class="k">${tag}</span>${esc(c.n)}</span>`;
+  });
+
+  /* columns */
+  let colRows = "";
+  (t.cols || []).forEach(c => {
+    const isPk = t.pk && t.pk.includes(c.n);
+    const type = c.t + (c.len ? `(${c.len})` : "");
+    colRows += `
+      <div class="colrow">
+        <span class="pk">${isPk ? "K" : ""}</span>
+        <div>
+          <div class="cn">${esc(c.n)} ${c.nn ? `<span style="color:#fb7185">·</span>` : ""}</div>
+          ${c.fk ? `<div class="fk">→ ${esc(c.fk)}</div>` : ""}
+        </div>
+        <span class="ct"><span class="${c.nn ? 'nn' : ''}">${esc(type)}</span></span>
+      </div>`;
+  });
+
+  /* relationships with narrative */
+  let relRows = "";
+  DATA.rels.forEach(r => {
+    if (r.from !== name && r.to !== name) return;
+    const other = r.from === name ? r.to : r.from;
+    if (!DATA.tables[other]) return;
+    const dir = r.from === name ? "→" : "←";
+    relRows += `
+      <div class="rel">
+        <span class="arr">${dir}</span>
+        <div style="flex:1;min-width:0">
+          <div class="rt">${esc(other)} <span style="font-family:var(--sans);font-weight:500;color:var(--muted)">(${esc(DATA.tables[other].label)})</span></div>
+          <div class="ron">on ${esc(r.on)}</div>
+          ${r.note ? `<div class="rnote">${esc(r.note)}</div>` : ""}
+          <div class="rnarr">${joinNarrative(r, name)}</div>
+        </div>
+        <span class="card">${esc(r.card)}</span>
+      </div>`;
+  });
+  if (!relRows) relRows = `<div class="notable">No curated relations for this table.</div>`;
+
+  /* join path from hub */
+  const path = joinPath("HimRec_Main", name);
+  let jp = "";
+  path.forEach((n, i) => {
+    if (i === 0){ jp += `<div class="jp"><b>${esc(n)}</b></div>`; return; }
+    const r = relBetween(path[i-1], n);
+    jp += `<div class="jp" style="padding-left:16px">└─ <b>${esc(n)}</b>${r ? ` <span style="color:var(--warn)">[${esc(r.on)}]</span>` : ""}</div>`;
+  });
+
+  /* SQL snippet */
+  let sql = "";
+  if (t.name === "HimRec_Main"){
+    sql = `-- Demographics join (cohort eligibility)\nSELECT m.PatientID, d.CountryOfOrigin_MisCntryID\nFROM HimRec_Main m WITH (NOLOCK)\nINNER JOIN HimRec_Data d\n   ON d.PatientID COLLATE SQL_Latin1_General_CP1_CI_AS =\n      m.PatientID COLLATE SQL_Latin1_General_CP1_CI_AS\nWHERE d.CountryOfOrigin_MisCntryID IS NOT NULL\n  AND ISNULL(m.Vip, 'N') <> 'Y';`;
+  } else if (name === "tbl_FCAP1A_Cohort10_Extended"){
+    sql = `-- Pull demographics for the cohort\nSELECT c.PatientID, m.Name, d.CountryOfOrigin_MisCntryID\nFROM tbl_FCAP1A_Cohort10_Extended c\nINNER JOIN AKULiveATdb.dbo.HimRec_Main m\n   ON m.PatientID = c.PatientID\nLEFT JOIN AKULiveATdb.dbo.HimRec_Data d\n   ON d.PatientID = c.PatientID;`;
+  } else {
+    const pkCols = (t.pk || []).filter(c => c !== "SourceID").join(", ");
+    sql = `-- Join ${t.name} back to the patient hub\nSELECT m.PatientID, x.*\nFROM tbl_FCAP1A_Cohort10_Extended c\nINNER JOIN HimRec_Main m ON m.PatientID = c.PatientID\nINNER JOIN ${t.name} x\n   ON x.PatientID COLLATE SQL_Latin1_General_CP1_CI_AS =\n      m.PatientID COLLATE SQL_Latin1_General_CP1_CI_AS;`;
+  }
+
+  /* sample questions that use this table */
+  const qs = (DATA.questions || []).filter(q => (q.path || []).includes(name));
+  let qref = "";
+  if (qs.length){
+    qref = `<div class="sec"><h3>Sample questions this table helps answer</h3>` +
+      qs.map(q => `<div class="qref" data-q="${esc(q.id)}"><span class="qi">?</span><span class="qt">${esc(q.q)}</span></div>`).join("") +
+      `</div>`;
+  }
+
+  detail.innerHTML = `
+    <div class="detail-head">
+      ${crumb}
+      <h2><span class="ticon" style="color:${st.color}">${iconSvg(roleOf(t), 19)}</span>${esc(t.name)}</h2>
+      <div class="dl">${esc(t.label)}</div>
+      <div class="badges">${badges}</div>
+      <div class="detail-desc">${esc(t.desc)}</div>
+    </div>
+    <div class="detail-body">
+      <div class="sec"><h3>Key columns · ${esc(st.label)}</h3><div class="keychips">${keyChips || `<span class="notable">No explicit keys.</span>`}</div></div>
+      <div class="sec"><h3>Columns (${(t.cols || []).length})</h3><div class="cols">${colRows}</div></div>
+      <div class="sec"><h3>Join keys · which tables it links to</h3><div class="rels">${relRows}</div></div>
+      <div class="sec"><h3>Join path from Patient Hub</h3><div class="joinpath">${jp}</div></div>
+      <div class="sec"><h3>Sample SQL</h3>
+        <div class="sqlbox"><pre>${sql.replace(/</g, "&lt;")}</pre></div>
+      </div>
+      ${qref}
+      <button class="focusbtn" data-focus="${esc(name)}">Focus this table in graph</button>
+    </div>`;
+
+  detail.classList.remove("hidden");
+
+  detail.querySelectorAll("[data-crumb]").forEach(el => {
+    el.addEventListener("click", () => {
+      if (el.getAttribute("data-crumb") === "overview") setView("overview");
+      else if (el.getAttribute("data-crumb") === "topic") setView("topic", t.topic);
+    });
+  });
+  detail.querySelectorAll(".qref").forEach(el => {
+    el.addEventListener("click", () => openQuestion(el.getAttribute("data-q")));
+  });
+  const fb = detail.querySelector(".focusbtn");
+  if (fb) fb.addEventListener("click", () => setView("table", null, name));
+}
+
+function renderNotable(name){
+  const t = DATA.tables[name];
+  const detail = $("#detail");
+  const prefix = name.split("_")[0];
+  const group = DATA.index[prefix] || [];
+  const cnt = DATA.index[prefix] ? DATA.index[prefix].length : 0;
+  const crumb = `<div class="crumb"><span class="cb" data-crumb="overview">Overview</span><span class="sep">/</span><span class="cb cur">${esc(name)}</span></div>`;
+  detail.innerHTML = `
+    <div class="detail-head">
+      ${crumb}
+      <h2><span class="ticon" style="color:#7182a1">${iconSvg("dict", 19)}</span>${esc(name)}</h2>
+      <div class="dl">Catalog table · not part of the curated graph</div>
+      <div class="badges"><span class="chip ext">AKULiveATdb</span><span class="chip dict">CATALOG</span></div>
+      <div class="detail-desc">This table exists in the 17,094-table catalog but is outside the curated clinical graph.</div>
+    </div>
+    <div class="detail-body">
+      <div class="sec"><h3>Prefix group</h3>
+        <div class="notable">It belongs to the <span class="cg">${esc(prefix)}</span> group (<b>${cnt}</b> tables). The prefix usually maps to a Meditech application: ${esc(prefixGroupHint(prefix))}.</div>
+      </div>
+      <div class="sec"><h3>Tip</h3>
+        <div class="notable">Try searching for the clinical table it feeds (e.g. a <span class="cg">HimRec_*</span>, <span class="cg">EmrPat_*</span> or <span class="cg">EmrPatSum_*</span>) to see the joins, or open the group in the catalog.</div>
+      </div>
+    </div>`;
+  detail.classList.remove("hidden");
+  detail.querySelector("[data-crumb]").addEventListener("click", () => setView("overview"));
+}
+
+/* ============================= Data Topic Availability panel ============================= */
+function renderDocTopic(t){
+  state.docName = t.t;
+  pushHash("#topic=doc:" + encodeURIComponent(t.t));
+  state.selected = null;
+  const detail = $("#detail");
+  const phase = DOC_TOPICS.find(g => g.items.includes(t)) || {};
+  const curated = docCurated(t);
+  const availChip = t.a === "Yes"
+    ? `<span class="chip pk" style="background:rgba(5,150,105,.12);color:#047857;border-color:rgba(5,150,105,.35)">AVAILABLE</span>`
+    : t.a === "No"
+      ? `<span class="chip pk" style="background:rgba(220,38,38,.1);color:#b91c1c;border-color:rgba(220,38,38,.35)">NOT AVAILABLE</span>`
+      : `<span class="chip ext">NOT SPECIFIED</span>`;
+  const list = (arr, db) => {
+    if (!arr || !arr.length) return `<div class="notable">— no example tables listed —</div>`;
+    return arr.map(n => `<div class="cg-tbl" data-n="${esc(n)}">${esc(n)}</div>`).join("");
+  };
+  const curList = curated.length
+    ? `<div class="sec"><h3>Curated equivalents in this explorer</h3>${curated.map(n => `<div class="cg-tbl" data-n="${esc(n)}">${esc(n)}</div>`).join("")}</div>`
+    : "";
+  const query = (t.at || []).length
+    ? `SELECT TOP 10 *\nFROM [NBIDRSRV].[AKULiveATdb].[dbo].[${t.at[0]}];`
+    : (t.nd || []).length
+      ? `SELECT TOP 10 *\nFROM [NBIDRSRV].[AKULivendb].[dbo].[${t.nd[0]}];`
+      : "— no relational validation query —";
+  const note = t.note ? `<div class="detail-desc">${esc(t.note)}</div>` : "";
+  const graphBtn = curated.length
+    ? `<button class="focusbtn" id="docGraphBtn">Show ${curated.length} curated table(s) in the graph</button>`
+    : `<div class="notable" style="margin-top:10px">None of the example tables are in the curated clinical graph — use the <b>catalog</b> or <b>search</b> to open them (they are indexed among the 17,094 catalog tables).</div>`;
+  const spSections = spDomainsOfDocTopic(t).map(id => { const p = spPlanOf(id); return p ? spSectionHTML(p) : ""; }).join("");
+  const spNote = !spSections
+    ? `<div class="notable" style="margin-top:16px">No FCAP1A SP proposal covers this topic yet — see the <a href="sps.html">SP Workspace</a> for the 11 proposed stored procedures.</div>`
+    : "";
+  detail.innerHTML = `
+    <div class="crumb"><span class="cb" data-crumb="overview">← Back</span><span>${esc(phase.p || "")}</span></div>
+    <div class="detail-head">
+      <h2><span class="ticon" style="color:#b08d2e">${iconSvg("hub", 19)}</span>${esc(t.t)}</h2>
+      <div class="badges">${availChip}</div>
+      <div class="dl">From <b>Data Topic Availability.docx</b> · FCAP1A source tables</div>
+      ${note}
+    </div>
+    <div class="detail-body">
+      ${curList}
+      <div class="sec"><h3>AKULiveATdb tables (example)</h3>${list(t.at)}</div>
+      <div class="sec"><h3>AKULivendb tables (example)</h3>${list(t.nd)}</div>
+      <div class="sec"><h3>Validation query</h3><div class="sqlbox"><pre>${esc(query)}</pre></div></div>
+      ${graphBtn}
+      ${spSections || spNote}
+    </div>`;
+  detail.classList.remove("hidden");
+  detail.querySelectorAll("[data-crumb]").forEach(el => el.addEventListener("click", () => setView("overview")));
+  detail.querySelectorAll(".cg-tbl[data-n]").forEach(el => {
+    el.addEventListener("click", () => selectTable(el.getAttribute("data-n")));
+  });
+  detail.querySelectorAll("[data-sptbl]").forEach(el => {
+    el.addEventListener("click", () => selectTable(el.getAttribute("data-sptbl")));
+  });
+  const gb = $("#docGraphBtn");
+  if (gb) gb.addEventListener("click", () => showDocInGraph(t));
+}
+
+function showDocInGraph(t){
+  state.docName = t.t;
+  state.docIds = new Set(docCurated(t));
+  setView("doc");
+}
+
+function prefixGroupHint(prefix){
+  const map = {
+    HimRec: "Master Patient Index / HIM", EmrPat: "EMR patient chart",
+    Mis: "Master dictionary", Adm: "Admissions", Reg: "Registration",
+    Bar: "Billing / AR", Amb: "Ambulatory / Clinic", Cws: "Care Web / Scheduling",
+    Om: "Order Management", Pha: "Pharmacy", Lab: "Laboratory", Rad: "Radiology",
+    Unv: "Universal dictionary", Pcs: "Point of Care", Abs: "Abstracting",
+  };
+  return map[prefix] || "see the group listing for context";
+}
+
+/* ============================= views ============================= */
+function setView(mode, topicId, tableName){
+  if (mode === "overview") closePanels();
+  state.mode = mode;
+  state.topicId = topicId || null;
+  state.focusTable = tableName || null;
+  state.highlighted = null;
+
+  if (mode === "overview") buildOverviewPositions();
+  else if (mode === "topic") buildTopicPositions(topicId);
+  else if (mode === "table") buildTablePositions(tableName);
+  else if (mode === "question") buildQuestionPositions(state.questionId);
+  else if (mode === "doc") buildDocPositions();
+
+  state.count = visibleIds().size;
+  fitToExtent();
+
+  document.querySelectorAll(".topic").forEach(el => el.classList.toggle("active", mode === "topic" && el.dataset.topic === topicId));
+  document.querySelectorAll(".qitem").forEach(el => el.classList.toggle("active", mode === "question" && el.dataset.q === state.questionId));
+  render();
+  pushHash(hashForState());
+}
+
+/* ===================== hash routing / browser Back ===================== */
+function hashForState(){
+  if (state.mode === "topic" && state.topicId) return "#topic=" + encodeURIComponent(state.topicId);
+  if (state.mode === "table" && state.focusTable) return "#tbl=" + encodeURIComponent(state.focusTable);
+  if (state.mode === "question" && state.questionId) return "#q=" + encodeURIComponent(state.questionId);
+  if (state.mode === "doc") return "#topic=doc:" + encodeURIComponent(state.docName || "");
+  return "#";
+}
+function pushHash(h){
+  if (h === location.hash) return;
+  if (h === "#" && location.hash === "") return;
+  if (history.pushState) history.pushState(null, "", h);
+}
+function closePanels(){
+  const d = $("#detail");
+  if (d) d.classList.add("hidden");
+}
+function routeFromHash(){
+  const h = location.hash;
+  closePanels();
+  if (h.startsWith("#topic=doc:")) {
+    const tn = decodeURIComponent(h.slice(11));
+    const t = DOC_TOPICS.flatMap(g => g.items).find(x => x.t === tn);
+    if (t) renderDocTopic(t);
+    else setView("overview");
+  } else if (h.startsWith("#topic=")) {
+    const t = decodeURIComponent(h.slice(7));
+    const topic = DATA.topics.find(x => x.id === t || x.name === t);
+    if (topic) setView("topic", topic.id);
+    else setView("overview");
+  } else if (h.startsWith("#tbl=")) {
+    const name = decodeURIComponent(h.slice(5));
+    if (DATA.tables[name]) { setView("table", null, name); renderDetail(name); }
+    else setView("overview");
+  } else if (h.startsWith("#q=")) {
+    const q = decodeURIComponent(h.slice(3));
+    const qid = DATA.questions.find(x => x.id === q || x.q === q);
+    if (qid) openQuestion(qid.id);
+    else setView("overview");
+  } else {
+    setView("overview");
+  }
+}
+
+function selectTable(name){
+  state.selected = name;
+  if (DATA.tables[name]) { renderDetail(name); pushHash("#tbl=" + encodeURIComponent(name)); }
+  else renderNotable(name);
+  render();
+}
+
+/* ============================= example questions ============================= */
+function openQuestion(id){
+  state.questionId = id;
+  state.selected = null;
+  setView("question");
+  renderQuestion(id);
+}
+
+function renderQuestion(id){
+  const q = DATA.questions.find(x => x.id === id);
+  if (!q) return;
+  const detail = $("#detail");
+  const crumb = `
+    <div class="crumb">
+      <span class="cb" data-crumb="overview">Overview</span>
+      <span class="sep">/</span>
+      <span class="cb cur">Example Question</span>
+    </div>`;
+
+  const items = q.path.map((n, i) => ({ n, on: (q.on || [])[i] || "" })).filter(x => isSource(x.n));
+  const chain = items.map(x => x.n);
+  let steps = "";
+  items.forEach((it, i) => {
+    const t = DATA.tables[it.n];
+    const on = i > 0 ? items[i-1].on : "";   /* join INTO this step */
+    const st = t ? roleStyle(t) : null;
+    steps += `
+      <div class="qstep">
+        <span class="qs-idx">${i + 1}</span>
+        ${st ? `<span class="ticon" style="color:${st.color};display:inline-flex;flex:none">${iconSvg(roleOf(t), 12)}</span>` : ""}
+        <span class="qs-tbl">${esc(it.n)}</span>
+        ${on ? `<span class="qs-arr">→</span><span class="qs-on">on ${esc(on)} <span class="abbr">${esc(keyAbbr(on))}</span></span>` : ""}
+      </div>`;
+  });
+
+  detail.innerHTML = `
+    <div class="detail-head">
+      ${crumb}
+      <h2 style="font-family:var(--sans);font-size:15px;line-height:1.45">${esc(q.q)}</h2>
+      <div class="dl" style="color:var(--accent)">Answer this with a ${esc(chain.length)}-hop join chain</div>
+      <div class="badges">
+        <span class="chip pk">${esc((DATA.topics.find(x => x.id === q.topic) || {}).name || q.topic)}</span>
+        <span class="chip ext">${esc(chain.length)} tables</span>
+      </div>
+      <div class="detail-desc qdesc">Join each hop below in order; the "on" keys show the exact join columns. Click any table to inspect its full detail.</div>
+    </div>
+    <div class="detail-body">
+      <div class="sec"><h3>Join chain</h3>${steps}</div>
+      <div class="sec"><h3>Answer SQL</h3>
+        <div class="sqlbox"><pre>${esc(q.sql)}</pre></div>
+      </div>
+      <button class="focusbtn" data-focus="${esc(id)}">Show this chain in the graph</button>
+    </div>`;
+
+  detail.classList.remove("hidden");
+  detail.querySelectorAll("[data-crumb]").forEach(el => {
+    el.addEventListener("click", () => {
+      if (el.getAttribute("data-crumb") === "overview") setView("overview");
+    });
+  });
+  const fb = detail.querySelector(".focusbtn");
+  if (fb) fb.addEventListener("click", () => setView("question"));
+}
+
+/* ============================= sidebar ============================= */
+function buildSidebar(){
+  const tl = $("#topiclist");
+  DATA.topics.forEach(t => {
+    const count = Object.keys(DATA.tables).filter(n => isSource(n) && DATA.tables[n].topic === t.id).length;
+    if (!count) return;   /* cohort-only topics (e.g. pipeline) have no source tables */
+    const el = document.createElement("div");
+    el.className = "topic";
+    el.dataset.topic = t.id;
+    el.innerHTML = `<span class="dot" style="background:${t.color};color:${t.color}"></span>
+      <span class="tname">${esc(t.name)}</span><span class="tcount">${count}</span>`;
+    el.addEventListener("click", () => setView("topic", t.id));
+    tl.appendChild(el);
+  });
+
+  const ql = $("#questionlist");
+  if (ql) (DATA.questions || []).forEach(q => {
+    const el = document.createElement("div");
+    el.className = "qitem";
+    el.dataset.q = q.id;
+    el.innerHTML = `<span class="qi">?</span><span class="qt">${esc(q.q)}</span>`;
+    el.addEventListener("click", () => openQuestion(q.id));
+    ql.appendChild(el);
+  });
+
+  const dl = $("#doctopics");
+  DOC_TOPICS.forEach(grp => {
+    const gEl = document.createElement("div");
+    gEl.className = "catalog-group open";
+    const head = document.createElement("div");
+    head.className = "cg-head";
+    head.innerHTML = `<span class="arrow">▶</span><span class="cg-name">${esc(grp.p)}</span><span style="margin-left:auto;font-size:10px;color:var(--faint)">${grp.items.length}</span>`;
+    const body = document.createElement("div");
+    body.className = "cg-tbls";
+    grp.items.forEach(it => {
+      const row = document.createElement("div");
+      row.className = "dtopic";
+      row.innerHTML = `<span class="tname">${esc(it.t)}</span><span class="davail ${docAvailCls(it.a)}">${docAvailTxt(it.a)}</span>`;
+      row.addEventListener("click", () => renderDocTopic(it));
+      body.appendChild(row);
+    });
+    head.addEventListener("click", () => gEl.classList.toggle("open"));
+    gEl.appendChild(head); gEl.appendChild(body);
+    dl.appendChild(gEl);
+  });
+}
+
+/* ============================= search ============================= */
+function buildSearchIndex(){
+  const idx = [];
+  Object.keys(DATA.tables).forEach(n => {
+    const t = DATA.tables[n];
+    idx.push({ name: n, curated: true, label: t.label, topic: topicOf(t).name });
+    (t.cols || []).forEach(c => {
+      idx.push({ name: n, curated: true, label: "column · " + c.n, topic: topicOf(t).name, col: c.n });
+    });
+  });
+  Object.entries(DATA.index).forEach(([g, tbls]) => {
+    tbls.forEach(tn => { if (!DATA.tables[tn]) idx.push({ name: tn, curated: false, label: g, topic: "catalog" }); });
+  });
+  return idx;
+}
+const SEARCH = buildSearchIndex();
+
+function doSearch(q){
+  const box = $("#searchbox");
+  const val = q.trim().toLowerCase();
+  if (!val){ box.classList.remove("open"); return; }
+  const matches = [];
+  for (const item of SEARCH){
+    if (matches.length >= 14) break;
+    if (item.name.toLowerCase().includes(val) || (item.label && item.label.toLowerCase().includes(val))){
+      matches.push(item);
+    }
+  }
+  if (!matches.length){
+    box.innerHTML = `<div class="empty">No matches for “${esc(q)}”</div>`;
+    box.classList.add("open");
+    return;
+  }
+  box.innerHTML = matches.map(m => `
+    <div class="item" data-id="${esc(m.name)}" data-cur="${m.curated ? 1 : 0}">
+      <span class="nm">${esc(m.name)}</span>
+      <span class="lb">${esc(m.label)}</span>
+    </div>`).join("");
+  box.classList.add("open");
+  box.querySelectorAll(".item").forEach(el => {
+    el.addEventListener("click", () => {
+      const name = el.dataset.id, curated = el.dataset.cur === "1";
+      box.classList.remove("open");
+      $("#search").value = name;
+      if (curated){ setView("table", null, name); renderDetail(name); }
+      else selectTable(name);
+    });
+  });
+}
+
+/* ============================= legend ============================= */
+function buildLegend(){
+  const rows = ROLE_ORDER.filter(role => role !== "cohort").map(role => {
+    const s = ROLE_STYLE[role];
+    const short = role === "hub" ? "patient hub — the universal PatientID key"
+      : role === "entity" ? "clinical event tables (one row per event/result)"
+      : "reference dictionaries (lookup labels)";
+    return `<span class="z" title="${esc(short)}"><i style="background:${s.color}"></i><b>${esc(s.label)}</b></span>`;
+  }).join("");
+  $("#legend").innerHTML =
+    `<span class="lg-hd">Star Schema</span>${rows}
+     <span class="z lgk" title="Edges joined on SourceID + PatientID (patient key)"><i style="background:#2f6bff"></i><b>Patient key</b></span>
+     <span class="z lgk" title="Edges joined on SourceID + VisitID (visit key — the encounter spine)"><i style="background:#e8860c"></i><b>Visit key</b></span>
+     <a class="lg-sp" href="sps.html" title="The FCAP1A stored procedures, their joins, validations and cross-SP checks live on the second page">SP outputs →</a>
+     <a class="lg-sp" href="topics.html#encounter" title="AdmVisits ⇄ RegAcct_Main (SourceID + VisitID, 1:1) anchors every visit-grained table">Visit spine →</a>`;
+}
+
+/* ============================= init ============================= */
+function init(){
+  $("#stTables").textContent = DATA.meta.catalog === "AKULiveATdb" ? DATA.meta.dbs.AKULiveATdb.tables.toLocaleString() : "—";
+  $("#stCols").textContent = DATA.meta.dbs.AKULiveATdb.columns.toLocaleString();
+  buildSidebar();
+  buildLegend();
+  attachSvgEvents();
+
+  const vf = $("#visitOnly");
+  if (vf){
+    vf.addEventListener("change", () => { state.count = visibleIds().size; fitToExtent(); render(); });
+    const src = Object.keys(DATA.tables).filter(isSource);
+    const n = src.filter(t => hasVisitID(DATA.tables[t])).length;
+    const c = $("#vfCount"); if (c) c.textContent = n;
+    const w = $("#vfWrap"); if (w) w.title = "Show only source tables that carry a VisitID (" + n + " of " + src.length + ")";
+  }
+
+  $("#search").addEventListener("input", e => doSearch(e.target.value));
+  $("#search").addEventListener("keydown", e => { if (e.key === "Escape"){ $("#searchbox").classList.remove("open"); $("#search").blur(); } });
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".searchwrap")) $("#searchbox").classList.remove("open");
+  });
+  $("#btnClear").addEventListener("click", () => setView("overview"));
+  window.addEventListener("resize", () => { fitToExtent(); render(); });
+
+  window.addEventListener("hashchange", routeFromHash);
+  routeFromHash();
+}
+
+init();
+</script>
+</body>
+</html>
+
+

@@ -1,0 +1,208 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AKU CDIO MAYO · Meditech Schema Explorer</title>
+<link rel="stylesheet" href="assets/site.css?v=4">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta name="description" content="Explore the AKU Meditech EMR schema: bird's-eye joins, 11 data topics, source tables, the visit/encounter spine, and the FCAP1A stored-procedure plans — built from the FCAP1A cohort project.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AKU CDIO MAYO · Schema Constellation">
+<meta property="og:title" content="AKU CDIO MAYO — Meditech Schema Explorer">
+<meta property="og:description" content="Explore the AKU Meditech EMR schema: bird's-eye joins, 11 data topics, source tables, the visit/encounter spine, and the FCAP1A stored-procedure plans.">
+<meta property="og:url" content="https://storage.googleapis.com/cdio-migration-schema-constellation/index.html">
+<meta name="twitter:card" content="summary">
+</head>
+<body>
+<nav class="nav">
+  <div class="brand">
+    <div class="logo sun"><svg viewBox="0 0 26 26" fill="none"><circle cx="13" cy="13" r="5" fill="#c9a227"/><path d="M13 2.2v3M13 20.8v3M2.2 13h3M20.8 13h3M5.4 5.4l2.1 2.1M18.5 18.5l2.1 2.1M20.6 5.4l-2.1 2.1M7.5 18.5l-2.1 2.1" stroke="#c9a227" stroke-width="1.9" stroke-linecap="round"/></svg></div>
+    <div><b>AKU <span class="gold">CDIO MAYO</span></b><small>Meditech EMR · Schema Explorer</small></div>
+  </div>
+  <div class="links">
+    <a href="index.html" class="active">Home</a>
+    <a href="explorer.html">Explorer</a>
+    <a href="topics.html">Data Topics</a>
+    <a href="sql.html">SQL Cookbook</a>
+    <a href="sps.html">SP Workspace</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="gridlines"></div>
+  <div class="wrap" style="position:relative">
+    <div class="badge"><span class="dot"></span>AKU CDIO MAYO · FCAP1A Cohort · AKULiveATdb</div>
+    <h1>See the whole EMR.<br><span class="grad">Then drill to one column.</span></h1>
+    <p class="lead">A bird's-eye map of the Meditech EMR schema — 11 clinical topics, the source tables behind them, the exact join keys, the visit/encounter spine every row anchors to, and the stored-procedure plans that build the FCAP1A cohort.</p>
+    <div class="actions">
+      <a class="btn primary" href="explorer.html">Open the Explorer <span class="arr">â†’</span></a>
+      <a class="btn ghost" href="topics.html">Start with Data Topics</a>
+      <a class="btn ghost" href="sql.html">Jump to SQL Cookbook</a>
+      <a class="btn ghost" href="sps.html">Review SP Workspace</a>
+    </div>
+  </div>
+  <div class="mini" aria-hidden="true">
+    <svg viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(170 170)">
+        <circle class="medge" r="70"></circle>
+        <circle class="medge" r="120"></circle>
+        <circle class="medge" r="160"></circle>
+        <line class="medge" x1="0" y1="0" x2="0" y2="-160"></line>
+        <line class="medge" x1="0" y1="0" x2="151" y2="49"></line>
+        <line class="medge" x1="0" y1="0" x2="-151" y2="49"></line>
+        <line class="medge" x1="0" y1="0" x2="-93" y2="-130"></line>
+        <line class="medge" x1="0" y1="0" x2="93" y2="-130"></line>
+        <line class="medge" x1="0" y1="0" x2="0" y2="160"></line>
+        <circle class="mhub" r="15" cx="0" cy="0"></circle>
+        <circle class="mnode" r="9" cx="0" cy="-160"></circle>
+        <circle class="mnode" r="9" cx="151" cy="49"></circle>
+        <circle class="mnode" r="9" cx="-151" cy="49"></circle>
+        <circle class="mnode" r="9" cx="-93" cy="-130"></circle>
+        <circle class="mnode" r="9" cx="93" cy="-130"></circle>
+        <circle class="mnode" r="9" cx="0" cy="160"></circle>
+        <text class="mlabel" x="0" y="-178" text-anchor="middle">HimRec_Main</text>
+        <text class="mlabel" x="168" y="60" text-anchor="middle">AdmVisits</text>
+        <text class="mlabel" x="-168" y="60" text-anchor="middle">AbsAcct_Diagnoses</text>
+        <text class="mlabel" x="-108" y="-132" text-anchor="middle">EmrPat_Allergies</text>
+        <text class="mlabel" x="80" y="-132" text-anchor="middle">PhaRxMedications</text>
+        <text class="mlabel" x="4" y="186" text-anchor="middle">LabSpecimens</text>
+      </g>
+    </svg>
+  </div>
+</header>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="stats">
+      <div class="stat"><b id="stTables">184</b><span>Curated tables</span></div>
+      <div class="stat"><b id="stSrc">150</b><span>Source tables</span></div>
+      <div class="stat"><b id="stTopics">11</b><span>Data topics</span></div>
+      <div class="stat"><b id="stRels">266</b><span>Join paths</span></div>
+      <div class="stat"><b id="stVisit">67</b><span>Visit-grained sources</span></div>
+      <div class="stat"><b id="stCatalog">17,094</b><span>Catalog tables</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-title">What you can do</div>
+    <h2 class="section-head">Not just a diagram. A learning tool.</h2>
+    <p class="section-sub">Every table carries its real columns, primary keys, join keys, and the SQL patterns the FCAP1A build actually uses — so you learn the schema the way the data flows.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="ic" style="background:rgba(56,189,248,.12);color:var(--accent)">â—‰</div>
+        <h3>Bird's-eye join map</h3>
+        <p>Start at the patient hub (HimRec_Main) and trace outward through identity, encounters, the clinical chart and dictionaries. Every edge is labelled with its exact join key.</p>
+        <span class="tag">Pan Â· Zoom Â· Drag</span>
+      </div>
+      <div class="card">
+        <div class="ic" style="background:rgba(167,139,250,.12);color:var(--vio)">â‹</div>
+        <h3>Drill into 11 data topics</h3>
+        <p>Identity, encounters, diagnoses, medications, allergies, immunizations, labs, family history, vitals, care plans and registries — each with its source tables and join plan.</p>
+        <span class="tag">Topic drill-down</span>
+      </div>
+      <div class="card">
+        <div class="ic" style="background:rgba(52,211,153,.12);color:var(--good)">â˜°</div>
+        <h3>Column-level detail</h3>
+        <p>Click any node for its full column list, primary keys, FK hints, relationships and the join path from the patient hub — 143,082 columns cataloged.</p>
+        <span class="tag">150 source tables</span>
+      </div>
+      <div class="card">
+        <div class="ic" style="background:rgba(251,191,36,.12);color:var(--warn)">?</div>
+        <h3>Example questions, answered</h3>
+        <p>Real questions — “who is foreign-born?”, “which patients have diabetes?”, “show me labs” — with the exact join chain and working SQL for each.</p>
+        <span class="tag">SQL Cookbook</span>
+      </div>
+      <div class="card">
+        <div class="ic" style="background:rgba(244,114,182,.12);color:var(--bad)">ðŸœš</div>
+        <h3>SP Generation Workspace</h3>
+        <p>One stored procedure per data topic. 11 proposed SPs read 150 source tables, anchor every row on the visit/encounter spine (AdmVisits.VisitID), and write the tbl_FCAP1A_*_Extended outputs into CDIO_MeditechDB.</p>
+        <span class="tag">Real lineage</span>
+      </div>
+      <div class="card">
+        <div class="ic" style="background:rgba(34,211,238,.12);color:var(--accent2)">âŒ•</div>
+        <h3>Search everything</h3>
+        <p>Search all 17,094 catalog tables and every column name — jump straight to a table's detail or to its group in the catalog.</p>
+        <span class="tag">Instant search</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="background:rgba(47,107,255,.045)">
+  <div class="wrap">
+    <div class="section-title">A suggested path</div>
+    <h2 class="section-head">Learn the schema in 4 steps</h2>
+    <p class="section-sub">Follow the flow from topic to SQL — the joins and the visit spine will feel obvious.</p>
+    <div class="path">
+      <a class="step" href="topics.html" style="text-decoration:none">
+        <div class="num" style="background:rgba(56,189,248,.15);color:var(--accent)">1</div>
+        <div><h4>Data Topics</h4><p>Pick one of 11 clinical domains. See its source tables, what each one means, and its join plan to the patient hub.</p></div>
+      </a>
+      <a class="step" href="explorer.html" style="text-decoration:none">
+        <div class="num" style="background:rgba(167,139,250,.15);color:var(--vio)">2</div>
+        <div><h4>Explore &amp; Drill</h4><p>Open the constellation, hover any table for its purpose, and click to inspect columns and labelled joins (SourceID + PatientID / VisitID).</p></div>
+      </a>
+      <a class="step" href="sql.html" style="text-decoration:none">
+        <div class="num" style="background:rgba(52,211,153,.15);color:var(--good)">3</div>
+        <div><h4>SQL Cookbook</h4><p>Copy ready-to-run queries that combine what you learned — answers to real clinical questions.</p></div>
+      </a>
+      <a class="step" href="sps.html" style="text-decoration:none">
+        <div class="num" style="background:rgba(244,114,182,.15);color:var(--bad)">4</div>
+        <div><h4>SP Workspace</h4><p>Validate the build: per-topic stored procedures, visit-grain checks, and trace one patient through SP output vs. source tables.</p></div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-title">Under the hood</div>
+    <h2 class="section-head">Built from the real schema, not guesses</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>AKULiveATdb</h3>
+        <p>The live Meditech EMR database — patient master index, clinical chart, orders, dictionaries. 150 source tables behind the 11 data topics live here.</p>
+      </div>
+      <div class="card">
+        <h3>AKULivendb</h3>
+        <p>Encounters &amp; visits live here (AdmVisits). Cross-database joins use SourceID + PatientID with COLLATE SQL_Latin1_General_CP1_CI_AS; visit-grained tables resolve through the AdmVisits.VisitID spine.</p>
+      </div>
+      <div class="card">
+        <h3>CDIO_MeditechDB</h3>
+        <p>FCAP1A analytics outputs — the 11 tbl_FCAP1A_*_Extended build tables created by 11 proposed stored procedures, each anchored on the visit spine.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Schema Constellation Â· generated from the AKU Meditech schema dump + FCAP1A build stored procedures</span>
+    <span class="right"><span>Analysis window: 2022-11-05 â†’ 2026-06-14</span></span>
+  </div>
+</footer>
+
+<script>
+const $ = (s,r=document)=>r.querySelector(s);
+fetch("data/schema.js?v=3").then(r=>r.text()).then(t=>{
+  const m = t.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
+  if(!m) return;
+  try{
+    const d = JSON.parse(m[1]);
+    const tables = Object.values(d.tables);
+    const src = tables.filter(v => v.role !== "cohort");
+    if($("#stTables")) $("#stTables").textContent = tables.length.toLocaleString();
+    if($("#stSrc")) $("#stSrc").textContent = src.length;
+    if($("#stTopics")) $("#stTopics").textContent = new Set(src.map(v=>v.topic)).size;
+    if($("#stRels")) $("#stRels").textContent = d.rels.length;
+    if($("#stVisit")) $("#stVisit").textContent = src.filter(v => (v.cols||[]).some(c=>c.n==="VisitID")).length;
+    if($("#stCatalog")) $("#stCatalog").textContent = (d.meta && d.meta.catalog && d.index) ? Object.values(d.index).reduce((a,b)=>a+b.length,0).toLocaleString() : "17,094";
+  }catch(e){}
+}).catch(()=>{});
+</script>
+</body>
+</html>
+

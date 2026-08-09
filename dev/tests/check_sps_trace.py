@@ -1,0 +1,31 @@
+# -*- coding: utf-8 -*-
+from playwright.sync_api import sync_playwright
+errs = []
+with sync_playwright() as p:
+    b = p.chromium.launch()
+    pg = b.new_page(viewport={"width": 1680, "height": 940})
+    pg.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
+    pg.on("pageerror", lambda e: errs.append(str(e)))
+    pg.goto("http://127.0.0.1:8123/sps.html")
+    pg.wait_for_timeout(1500)
+    print("blocks:", pg.evaluate("document.querySelectorAll('.topic-block').length"))
+    print("trace cards:", pg.evaluate("document.querySelectorAll('.trace-card').length"))
+    print("trace inputs:", pg.evaluate("document.querySelectorAll('.trace-pid').length"))
+    # generate trace SQL for diagnosis topic
+    pg.evaluate("document.querySelector('#sp-diagnosis .trace-pid').value = 'P12345'")
+    pg.evaluate("document.querySelector('#sp-diagnosis .trace-btn').click()")
+    pg.wait_for_timeout(300)
+    sql = pg.evaluate("document.querySelector('#sp-diagnosis .trace-code').textContent")
+    print("trace sql len:", len(sql))
+    print("  has TRACE ONE PATIENT:", 'TRACE ONE PATIENT : P12345' in sql)
+    print("  has OutRows:", 'SELECT COUNT(*) AS OutRows' in sql)
+    print("  has AbsAcct_Diagnoses join trace:", 'AbsAcct_Diagnoses' in sql and 'AdmVisits' in sql)
+    print("  has EXPECT:", 'EXPECT:' in sql)
+    cb = pg.evaluate("document.querySelector('#sp-diagnosis .trace-copy').getAttribute('data-sql')")
+    print("  copy data-sql set:", len(cb) > 100)
+    # chip styling via shared css (no inline style block now)
+    chipOk = pg.evaluate("getComputedStyle(document.querySelector('#sp-diagnosis .sp-meta .chip')).borderRadius")
+    print("chip border-radius:", chipOk)
+    print("console errors:", errs if errs else "none")
+    pg.close()
+    b.close()
