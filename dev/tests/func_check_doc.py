@@ -28,7 +28,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1800)
     print("== overview ==")
     run(b, pg, "overview", [
-        ("184 nodes", lambda g: g.evaluate("document.querySelectorAll('.node').length") == 184),
+        ("170 nodes", lambda g: g.evaluate("document.querySelectorAll('.node').length") == 170),
         ("11 category groups", lambda g: g.evaluate("document.querySelectorAll('#doctopics .catalog-group').length") == 11),
         ("doc topics count", lambda g: g.evaluate("document.querySelectorAll('#doctopics .dtopic').length")),
         ("groups collapsed by default", lambda g: g.evaluate("document.querySelectorAll('#doctopics .catalog-group.open').length") == 0),

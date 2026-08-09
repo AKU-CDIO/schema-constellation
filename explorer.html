@@ -1427,13 +1427,7 @@ function renderDocTopic(t){
 
 function showDocInGraph(t){
   state.docName = t.t;
-  let curated = phCurated(t);
-  if (!curated.length){
-    /* start-schema context: subtopic with no curated tables shows its
-       category's full source set so the graph is never left empty */
-    curated = Object.keys(DATA.tables).filter(n =>
-      isSource(n) && DATA.tables[n].topic === t.cat && n !== "HimRec_Main");
-  }
+  const curated = phCurated(t);
   state.docIds = new Set(curated);
   setView("doc");
 }

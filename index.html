@@ -6,11 +6,11 @@
 <title>AKU CDIO MAYO · Meditech Schema Explorer</title>
 <link rel="stylesheet" href="assets/site.css?v=6">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-<meta name="description" content="Explore the AKU Meditech EMR schema: bird's-eye joins, 11 data topics, source tables, the visit/encounter spine, and the FCAP1A stored-procedure plans — built from the FCAP1A cohort project.">
+<meta name="description" content="Explore the AKU Meditech EMR schema: bird's-eye joins, 54 data topics, source tables, the visit/encounter spine, and the FCAP1A stored-procedure plans — built from the FCAP1A cohort project.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AKU CDIO MAYO · Schema Constellation">
 <meta property="og:title" content="AKU CDIO MAYO — Meditech Schema Explorer">
-<meta property="og:description" content="Explore the AKU Meditech EMR schema: bird's-eye joins, 11 data topics, source tables, the visit/encounter spine, and the FCAP1A stored-procedure plans.">
+<meta property="og:description" content="Explore the AKU Meditech EMR schema: bird's-eye joins, 54 data topics, source tables, the visit/encounter spine, and the FCAP1A stored-procedure plans.">
 <meta property="og:url" content="https://storage.googleapis.com/cdio-migration-schema-constellation/index.html">
 <meta name="twitter:card" content="summary">
 </head>
@@ -34,7 +34,7 @@
   <div class="wrap" style="position:relative">
     <div class="badge"><span class="dot"></span>AKU CDIO MAYO · FCAP1A Cohort · AKULiveATdb</div>
     <h1>See the whole EMR.<br><span class="grad">Then drill to one column.</span></h1>
-    <p class="lead">A bird's-eye map of the Meditech EMR schema — 54 data topics across 5 phases, the source tables behind them, the exact join keys, the visit/encounter spine every row anchors to, and the 19 FCAP1A stored-procedure plans that build the cohort.</p>
+    <p class="lead">A bird's-eye map of the Meditech EMR schema — 54 data topics across 5 phases, the source tables behind them, the exact join keys, the visit/encounter spine every row anchors to, and the 29 FCAP1A stored-procedure plans that build the cohort.</p>
     <div class="actions">
       <a class="btn primary" href="explorer.html">Open the Explorer <span class="arr">→</span></a>
       <a class="btn ghost" href="topics.html">Start with Data Topics</a>
@@ -120,7 +120,7 @@
       <div class="card">
         <div class="ic" style="background:rgba(244,114,182,.12);color:var(--bad)">ðŸœš</div>
         <h3>SP Generation Workspace</h3>
-        <p>One stored procedure per SP-covered topic. 19 FCAP1A SP plans across the five phases read the curated source tables, anchor every row on the visit/encounter spine (AdmVisits.VisitID), and write the tbl_FCAP1A_* outputs into CDIO_MeditechDB.</p>
+        <p>One stored procedure per SP-covered topic. 29 FCAP1A SP plans across the five phases read the curated source tables, anchor every row on the visit/encounter spine (AdmVisits.VisitID), and write the tbl_FCAP1A_* outputs into CDIO_MeditechDB.</p>
         <span class="tag">Real lineage</span>
       </div>
       <div class="card">
@@ -174,7 +174,7 @@
       </div>
       <div class="card">
         <h3>CDIO_MeditechDB</h3>
-        <p>FCAP1A analytics outputs — the 19 tbl_FCAP1A_* build tables created by the FCAP1A stored procedures, each anchored on the visit spine.</p>
+        <p>FCAP1A analytics outputs — the 33 tbl_FCAP1A_* build tables created by the FCAP1A stored procedures, each anchored on the visit spine.</p>
       </div>
     </div>
   </div>
