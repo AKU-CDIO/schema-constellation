@@ -9,12 +9,12 @@ with sync_playwright() as p:
     pg.goto("http://127.0.0.1:8123/explorer.html")
     pg.wait_for_timeout(1500)
     print("side labels:", pg.evaluate("Array.from(document.querySelectorAll('.side-label')).map(s => s.textContent)"))
-    print("topic items:", pg.evaluate("document.querySelectorAll('#topiclist .topic').length"))
+    print("category groups:", pg.evaluate("document.querySelectorAll('#doctopics .cg-head').length"))
     print("doctopics items:", pg.evaluate("document.querySelectorAll('#doctopics .dtopic').length"))
     print("questionlist present:", pg.evaluate("!!document.querySelector('#questionlist')"))
     print("catalog present:", pg.evaluate("!!document.querySelector('#catalog')"))
-    # click a curated topic -> topic view
-    pg.evaluate("document.querySelector('#topiclist .topic').click()")
+    # click a category header -> topic view
+    pg.evaluate("document.querySelector('#doctopics .cg-head').click()")
     pg.wait_for_timeout(400)
     print("topic click mode:", pg.evaluate("state.mode"), "| hash:", pg.evaluate("location.hash"))
     # click a doc topic -> drill-down panel (expand its category group first)

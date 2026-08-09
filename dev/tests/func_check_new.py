@@ -12,8 +12,8 @@ with sync_playwright() as p:
     pg.goto(URL)
     pg.wait_for_timeout(1500)
 
-    # topic drill
-    pg.locator(".topic").nth(1).click()
+    # topic drill via category header (2nd group = Encounters & Visits)
+    pg.evaluate("Array.from(document.querySelectorAll('#doctopics .catalog-group'))[1].querySelector('.cg-head').click()")
     pg.wait_for_timeout(300)
     out.append(("topic", pg.locator(".node").count(), pg.evaluate("document.querySelector('.viewlabel') ? document.querySelector('.viewlabel').textContent : ''")))
 

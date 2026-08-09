@@ -128,6 +128,7 @@
   .catalog-group{margin-top:4px}
   .catalog-group > .cg-head{padding:9px 10px;cursor:pointer;border-radius:10px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
   .catalog-group > .cg-head:hover{background:rgba(148,163,184,.12)}
+  .catalog-group > .cg-head.active{background:rgba(47,107,255,.08);color:var(--accent)}
   .catalog-group > .cg-head .arrow{transition:.2s;font-size:9px;width:14px}
   .catalog-group.open > .cg-head .arrow{transform:rotate(90deg)}
   .catalog-group .cg-tbls{display:none;padding-left:8px}
@@ -342,7 +343,6 @@
       <div class="side-scroll">
         <label class="vf" id="vfWrap" title="Show only source tables that carry a VisitID"><input type="checkbox" id="visitOnly"><span>Visit-grained tables only</span><b id="vfCount">67</b></label>
         <div class="side-label">Data Topics</div>
-        <div id="topiclist"></div>
         <div id="doctopics"></div>
       </div>
     </aside>
@@ -1418,6 +1418,7 @@ function renderDocTopic(t){
   });
   const gb = $("#docGraphBtn");
   if (gb) gb.addEventListener("click", () => showDocInGraph(t));
+  if (curated.length) showDocInGraph(t);
 }
 
 function showDocInGraph(t){
@@ -1454,7 +1455,7 @@ function setView(mode, topicId, tableName){
   state.count = visibleIds().size;
   fitToExtent();
 
-  document.querySelectorAll(".topic").forEach(el => el.classList.toggle("active", mode === "topic" && el.dataset.topic === topicId));
+  document.querySelectorAll(".cg-head").forEach(el => el.classList.toggle("active", mode === "topic" && el.dataset.cat === topicId));
   document.querySelectorAll(".qitem").forEach(el => el.classList.toggle("active", mode === "question" && el.dataset.q === state.questionId));
   render();
   pushHash(hashForState());
@@ -1581,19 +1582,6 @@ function renderQuestion(id){
 
 /* ============================= sidebar ============================= */
 function buildSidebar(){
-  const tl = $("#topiclist");
-  DATA.topics.forEach(t => {
-    const count = Object.keys(DATA.tables).filter(n => isSource(n) && DATA.tables[n].topic === t.id).length;
-    if (!count) return;   /* cohort-only topics (e.g. pipeline) have no source tables */
-    const el = document.createElement("div");
-    el.className = "topic";
-    el.dataset.topic = t.id;
-    el.innerHTML = `<span class="dot" style="background:${t.color};color:${t.color}"></span>
-      <span class="tname">${esc(t.name)}</span><span class="tcount">${count}</span>`;
-    el.addEventListener("click", () => setView("topic", t.id));
-    tl.appendChild(el);
-  });
-
   const ql = $("#questionlist");
   if (ql) (DATA.questions || []).forEach(q => {
     const el = document.createElement("div");
@@ -1617,6 +1605,7 @@ function buildSidebar(){
     gEl.className = "catalog-group";
     const head = document.createElement("div");
     head.className = "cg-head";
+    head.dataset.cat = id;
     head.innerHTML = `<span class="arrow">▶</span><span style="width:8px;height:8px;border-radius:50%;background:${c};flex:none"></span><span class="cg-name">${esc(catName(id))}</span><span style="margin-left:auto;font-size:10px;color:var(--faint)">${cSrc} src · ${items.length} topics</span>`;
     const body = document.createElement("div");
     body.className = "cg-tbls";
@@ -1628,7 +1617,11 @@ function buildSidebar(){
       row.addEventListener("click", () => renderDocTopic(it));
       body.appendChild(row);
     });
-    head.addEventListener("click", () => gEl.classList.toggle("open"));
+    head.addEventListener("click", () => {
+      gEl.classList.toggle("open");
+      closePanels();
+      setView("topic", id);
+    });
     gEl.appendChild(head); gEl.appendChild(body);
     dl.appendChild(gEl);
   });

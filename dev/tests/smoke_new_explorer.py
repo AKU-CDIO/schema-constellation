@@ -13,7 +13,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(2500)
     print("nodes:", pg.locator(".node").count())
     print("edges:", pg.locator(".edge").count())
-    print("topics:", pg.locator(".topic").count())
+    print("categories:", pg.locator("#doctopics .cg-head").count())
     print("legend z rows:", pg.locator("#legend .z").count())
     print("brand h1:", pg.locator(".brand h1").inner_text())
     print("legend has Reset View:", pg.locator("#btnClear").count())
