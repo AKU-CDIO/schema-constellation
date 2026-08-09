@@ -17,12 +17,9 @@ with sync_playwright() as p:
     print("  detail opens, hash:", pg.evaluate("location.hash"))
     pg.go_back(); pg.wait_for_timeout(500)
     print("  back -> detail hidden:", pg.evaluate("document.querySelector('#detail').classList.contains('hidden')"), "| hash:", pg.evaluate("location.hash"))
-    # doc topic SP plan
-    pg.goto(BASE + "explorer.html")
+    # doc topic SP plan (via deep link; subtopic click now only shows in graph)
+    pg.goto(BASE + "explorer.html#topic=doc:Diagnosis%20%26%20Problem%20List")
     pg.wait_for_timeout(2000)
-    pg.evaluate("Array.from(document.querySelectorAll('#doctopics .catalog-group')).find(g => g.textContent.includes('Diagnoses & Problem List')).querySelector('.cg-head').click()")
-    pg.evaluate("Array.from(document.querySelectorAll('#doctopics .dtopic')).find(r => r.textContent.includes('Diagnosis')).click()")
-    pg.wait_for_timeout(400)
     print("live doc-topic SP plan:", pg.evaluate("!!Array.from(document.querySelectorAll('#detail h3')).find(h => h.textContent.includes('SP Generation Plan'))"), "| chips:", pg.evaluate("document.querySelectorAll('#detail [data-sptbl]').length"))
     # sps
     pg.goto(BASE + "sps.html")

@@ -1619,7 +1619,7 @@ function buildSidebar(){
       const row = document.createElement("div");
       row.className = "dtopic";
       row.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${(grp && grp.color) || "#2f6bff"};flex:none" title="${esc((grp && grp.p) || "")}"></span><span class="tname">${esc(it.t)}</span>${it.sp ? `<span class="davail yes">SP</span>` : ""}<span class="davail ${docAvailCls(it.a)}">${docAvailTxt(it.a)}</span>`;
-      row.addEventListener("click", () => renderDocTopic(it));
+      row.addEventListener("click", () => { closePanels(); showDocInGraph(it); });
       body.appendChild(row);
     });
     head.addEventListener("click", () => {

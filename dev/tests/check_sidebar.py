@@ -17,9 +17,8 @@ with sync_playwright() as p:
     pg.evaluate("document.querySelector('#doctopics .cg-head').click()")
     pg.wait_for_timeout(400)
     print("topic click mode:", pg.evaluate("state.mode"), "| hash:", pg.evaluate("location.hash"))
-    # click a doc topic -> drill-down panel (expand its category group first)
-    pg.evaluate("Array.from(document.querySelectorAll('#doctopics .catalog-group')).find(g => g.textContent.includes('Diagnoses & Problem List')).querySelector('.cg-head').click()")
-    pg.evaluate("Array.from(document.querySelectorAll('#doctopics .dtopic')).find(r => r.textContent.includes('Diagnosis')).click()")
+    # drill into a doc topic via deep link (subtopic click now only shows in the graph)
+    pg.evaluate("location.hash='#topic=doc:'+encodeURIComponent('Diagnosis & Problem List')")
     pg.wait_for_timeout(400)
     print("doc click hash:", pg.evaluate("location.hash"), "| has SP plan:", pg.evaluate("Array.from(document.querySelectorAll('#detail h3')).some(h => h.textContent.includes('SP Generation Plan'))"))
     # Back crumb closes panel now

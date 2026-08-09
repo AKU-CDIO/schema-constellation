@@ -17,9 +17,8 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     out.append(("topic", pg.locator(".node").count(), pg.evaluate("document.querySelector('.viewlabel') ? document.querySelector('.viewlabel').textContent : ''")))
 
-    # doc topic drill-down (sidebar Data Topics -> category -> availability row)
-    pg.evaluate("Array.from(document.querySelectorAll('#doctopics .catalog-group')).find(g => g.textContent.includes('Diagnoses & Problem List')).querySelector('.cg-head').click()")
-    pg.evaluate("Array.from(document.querySelectorAll('#doctopics .dtopic')).find(r => r.textContent.includes('Diagnosis')).click()")
+    # doc topic drill-down via deep link (subtopic click now only shows in the graph)
+    pg.evaluate("location.hash='#topic=doc:'+encodeURIComponent('Diagnosis & Problem List')")
     pg.wait_for_timeout(300)
     out.append(("doc detail open", pg.evaluate("!document.getElementById('detail').classList.contains('hidden')")))
     out.append(("doc has SP plan", pg.evaluate("Array.from(document.querySelectorAll('#detail h3')).some(h => h.textContent.includes('SP Generation Plan'))")))

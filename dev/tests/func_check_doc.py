@@ -57,9 +57,7 @@ with sync_playwright() as p:
 
     print("== doc topic panel ==")
     pg.evaluate("""(() => {
-      [...document.querySelectorAll('#doctopics .catalog-group')].find(g=>g.textContent.includes('Diagnoses & Problem List')).querySelector('.cg-head').click();
-      const rows=[...document.querySelectorAll('#doctopics .dtopic')];
-      rows.find(r=>r.textContent.includes('Diagnosis')).click();
+      location.hash = '#topic=doc:' + encodeURIComponent('Diagnosis & Problem List');
     })()""")
     pg.wait_for_timeout(300)
     run(b, pg, "panel", [
