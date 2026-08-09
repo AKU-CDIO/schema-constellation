@@ -1,16 +1,16 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Data Topics · AKU CDIO MAYO</title>
-<link rel="stylesheet" href="assets/site.css?v=4">
+<title>Data Topics · Phase 1-5 · AKU CDIO MAYO</title>
+<link rel="stylesheet" href="assets/site.css?v=5">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-<meta name="description" content="Drill into Meditech EMR data topics: identity, encounters, diagnoses, meds, labs and more — each with its source tables, join plan, visit/encounter spine and validation SQL.">
+<meta name="description" content="All AKU Meditech EMR data topics organised by Phase 1-5: core clinical data, operational & ancillary, imaging & diagnostics, specialty & longitudinal, and extended & future — each with source tables, join plan, visit/encounter spine, and FCAP1A stored-procedure validation SQL.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AKU CDIO MAYO · Schema Constellation">
-<meta property="og:title" content="Data Topics · AKU CDIO MAYO">
-<meta property="og:description" content="Drill into Meditech EMR data topics: identity, encounters, diagnoses, meds, labs and more — each with its source tables, join plan, visit/encounter spine and validation SQL.">
+<meta property="og:title" content="Data Topics · Phase 1-5 · AKU CDIO MAYO">
+<meta property="og:description" content="All AKU Meditech EMR data topics organised by Phase 1-5, each with source tables, join plan, visit/encounter spine and FCAP1A stored-procedure validation SQL.">
 <meta property="og:url" content="https://storage.googleapis.com/cdio-migration-schema-constellation/topics.html">
 <meta name="twitter:card" content="summary">
 </head>
@@ -18,7 +18,7 @@
 <nav class="nav">
   <div class="brand">
     <div class="logo sun"><svg viewBox="0 0 26 26" fill="none"><circle cx="13" cy="13" r="5" fill="#c9a227"/><path d="M13 2.2v3M13 20.8v3M2.2 13h3M20.8 13h3M5.4 5.4l2.1 2.1M18.5 18.5l2.1 2.1M20.6 5.4l-2.1 2.1M7.5 18.5l-2.1 2.1" stroke="#c9a227" stroke-width="1.9" stroke-linecap="round"/></svg></div>
-    <div><b>AKU <span class="gold">CDIO MAYO</span></b><small>Data Topics</small></div>
+    <div><b>AKU <span class="gold">CDIO MAYO</span></b><small>Data Topics · Phase 1-5</small></div>
   </div>
   <div class="links">
     <a href="index.html">Home</a>
@@ -32,12 +32,13 @@
 <header class="pagehead">
   <div class="wrap">
     <div class="section-title">Data Topics</div>
-    <h1>Every clinical domain, one click away.</h1>
-    <p class="lead">Each topic collects the source tables behind it — what each one means, the exact join keys, and the visit/encounter spine it anchors to. Click a topic to explore it in the constellation, or a table to jump to its columns.</p>
+    <h1>Every clinical domain, one click away — grouped by phase.</h1>
+    <p class="lead">Each phase topic collects the source tables behind it — what each one means, the exact join keys, and the visit/encounter spine it anchors to. SP-covered topics carry the FCAP1A validation plan and a one-patient trace.</p>
     <div class="stats" id="tpStats" style="margin-top:1.1rem">
+      <div class="stat"><b id="tpPhases">—</b><span>Build phases</span></div>
       <div class="stat"><b id="tpN">—</b><span>Data topics</span></div>
       <div class="stat"><b id="tpTbls">—</b><span>Source tables</span></div>
-      <div class="stat"><b id="tpRels">—</b><span>Join paths</span></div>
+      <div class="stat"><b id="tpSP">—</b><span>SP plans</span></div>
       <div class="stat"><b id="tpVisit">—</b><span>Visit-grained sources</span></div>
       <div class="stat"><b id="tpKeys">—</b><span>Join keys</span></div>
     </div>
@@ -47,12 +48,12 @@
 <section>
   <div class="wrap">
     <div class="spsearch-wrap">
-      <input id="tpSearch" type="search" placeholder="Search topics, tables, or join keys…" autocomplete="off" aria-label="Filter topics">
+      <input id="tpSearch" type="search" placeholder="Search phases, topics, tables, or join keys…" autocomplete="off" aria-label="Filter topics">
       <span class="spsearch-count" id="tpSearchCount"></span>
     </div>
   </div>
-  <div class="wrap" id="topics">
-    <div class="topic-loading">Loading schema data…</div>
+  <div class="wrap" id="phases">
+    <div class="topic-loading">Loading phase data…</div>
   </div>
 </section>
 
@@ -66,23 +67,26 @@
 <script>
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const SPOUT = {identity:"Demographics",encounter:"Encounters",diagnosis:"Diagnoses",medication:"Medications",allergy:"Allergies",immunization:"Immunizations",lab:"Labs_Results",family:"FamilyHistory",vitals:"Flowsheets",careplan:"TreatmentPlans",registry:"Registries"};
 const ZONE = {hub:"HUB",identity:"IDENTITY",encounter:"ENCOUNTER",clinical:"CLINICAL",clinical_detail:"DETAIL",dictionary:"DICT"};
 const ZONE_ORDER = ["hub","identity","encounter","clinical","clinical_detail","dictionary"];
+const PHCOLOR = {core:"#2f6bff", ops:"#7c3aed", imaging:"#059669", specialty:"#d97706", future:"#db2777"};
 const dbOf = n => n === "AdmVisits" ? "AKULivendb" : "AKULiveATdb";
-const outName = id => (SPOUT[id] || id.replace(/\b\w/g, c => c.toUpperCase())) + "_Extended";
-const spName = id => "sp_FCAP1A_" + outName(id).replace("_Extended", "");
 const hasVisitID = t => (t.cols || []).some(c => c.n === "VisitID");
 const hasPatientID = t => (t.cols || []).some(c => c.n === "PatientID");
 const spineOf = n => /^(RegAcct_|PcsAcct|OmOrd|Pth|ItsResult|EmrAcctRep)/.test(n) ? "RegAcct_Main" : "AdmVisits";
+const outFull = t => t.sp.out;
+const domOf = t => outFull(t).replace("tbl_FCAP1A_", "").replace("_Extended", "").replace("_Merged", "");
+const planName = t => "sp_FCAP1A_" + domOf(t);
+const procName = t => "usp_Build_" + t.sp.name;
 
 function valSql(topic, members, anchor){
-  const out = outName(topic.id);
-  const dom = out.replace("_Extended", "");
+  if (!topic.sp) return null;
+  const out = outFull(topic);
+  const dom = domOf(topic);
   const L = [];
   L.push(`-- ============================================================`);
-  L.push(`-- SP PLAN    : ${spName(topic.id)}`);
-  L.push(`-- OUTPUT     : CDIO_MeditechDB.dbo.tbl_FCAP1A_${out}`);
+  L.push(`-- SP PLAN    : ${planName(topic)}  (proc ${procName(topic)})`);
+  L.push(`-- OUTPUT     : CDIO_MeditechDB.dbo.${out}`);
   L.push(`-- SOURCES    : ${members.length} tables (${dbOf(members[0].name)} + AKULivendb)`);
   L.push(`-- ============================================================`);
   L.push(`--`);
@@ -106,28 +110,29 @@ function valSql(topic, members, anchor){
     `SELECT COUNT(*) AS Orphans FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(anchor)}.dbo.${anchor} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE h.PatientID IS NULL;`));
   L.push(`--`);
   L.push(`-- (4) OUTPUT CONTRACT - run AFTER the build`);
-  L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients, COUNT(DISTINCT VisitID) AS Visits FROM CDIO_MeditechDB.dbo.tbl_FCAP1A_${out};`);
+  L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients, COUNT(DISTINCT VisitID) AS Visits FROM CDIO_MeditechDB.dbo.${out};`);
   L.push(`--`);
   L.push(`-- (5) CROSS-SP - this output must be a subset of the Demographics universe`);
-  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.tbl_FCAP1A_${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
+  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
   return L.join("\n");
 }
 
 function traceForPatient(p, pid){
-  const out = outName(p.topic.id);
-  const dom = out.replace("_Extended", "");
+  const topic = p.topic;
+  if (!topic.sp) return null;
+  const out = outFull(topic);
   const q = String(pid).replace(/'/g, "''");
   const L = [];
   L.push(`-- ============================================================`);
   L.push(`-- TRACE ONE PATIENT : ${pid}`);
-  L.push(`-- SP PLAN  : ${spName(p.topic.id)}`);
-  L.push(`-- OUTPUT   : CDIO_MeditechDB.dbo.tbl_FCAP1A_${out}`);
+  L.push(`-- SP PLAN  : ${planName(topic)}  (proc ${procName(topic)})`);
+  L.push(`-- OUTPUT   : CDIO_MeditechDB.dbo.${out}`);
   L.push(`-- RULE     : for this patient the SP output must reconcile with`);
   L.push(`--           the source tables and their joins (step 3 == step 1).`);
   L.push(`-- ============================================================`);
   L.push(`--`);
   L.push(`-- (1) OUTPUT ROWS - what the SP produced for the patient`);
-  L.push(`SELECT COUNT(*) AS OutRows FROM CDIO_MeditechDB.dbo.tbl_FCAP1A_${out} WHERE PatientID = '${q}';`);
+  L.push(`SELECT COUNT(*) AS OutRows FROM CDIO_MeditechDB.dbo.${out} WHERE PatientID = '${q}';`);
   L.push(`--`);
   L.push(`-- (2) SOURCE ROWS - rows each source table holds for the patient`);
   L.push(p.members.map(t => {
@@ -150,102 +155,163 @@ function traceForPatient(p, pid){
   return L.join("\n");
 }
 
-fetch("data/schema.js?v=3").then(r => r.text()).then(t => {
-  const m = t.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
-  if (!m) throw new Error("no schema data");
+function topicBlock(ph, t, tables, rels){
+  const color = PHCOLOR[ph.id] || "#2f6bff";
+  const members = t.tables.map(n => tables[n]).filter(Boolean);
+  if (!members.length){
+    return `
+    <div class="topic-block na" id="topic-${t.id}" style="--tone:${color}">
+      <div class="topic-head">
+        <div class="tone-line"></div>
+        <div>
+          <h2>${esc(t.name)}</h2>
+          <p>${esc(t.desc)}</p>
+          <div class="sp-meta">
+            <span class="chip" style="color:${color}">${esc(t.avail === "Yes" ? "Available" : "Not available")}</span>
+            <span class="chip" style="color:${color}">No source tables in the FCAP1A set</span>
+          </div>
+        </div>
+      </div>
+      <div class="na-note">${esc(t.note || "External to the relational Meditech schema.")}</div>
+    </div>`;
+  }
+  const internal = rels.filter(r => r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
+  const anchor = (members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
+  const visMembers = members.filter(hasVisitID);
+  const keys = [...new Set([...internal.map(r => r.on), ...(visMembers.length ? ["SourceID + VisitID"] : [])])];
+  const hubMember = members.some(x => x.name === anchor);
+  const cards = members.map(m => `
+    <div class="sp-card">
+      <div class="n"><a href="explorer.html#tbl=${encodeURIComponent(m.name)}">${esc(m.name)}</a></div>
+      <div class="l">${esc(m.label || m.desc || "")}</div>
+      <div class="k"><span class="chip" style="color:${color}">${ZONE[m.zone] || (m.zone || "").toUpperCase()}</span>${hasVisitID(m) ? `<span class="chip" style="color:var(--warn)">VisitID</span>` : ""}<span>${m.cols.length} cols</span></div>
+    </div>`).join("");
+  const joins = internal.length
+    ? internal.map(r => `
+      <div class="jp"><span>${esc(r.from)}</span><span class="arr">→</span><span>${esc(r.to)}</span><code>ON ${esc(r.on)}</code><em>${esc(r.card)}</em></div>`).join("")
+    : `<div class="jp jp-hub"><span>${esc(members.map(x => x.name).slice(0, 3).join(", "))}${members.length > 3 ? " …" : ""}</span><span class="arr">→</span><span>${esc(anchor)}</span><code>ON SourceID + PatientID</code><em>star join</em></div>`;
+  const visitSpine = visMembers.length ? `
+    <h4 style="margin-top:1.05rem">Visit / encounter spine · ${visMembers.length} visit-grained</h4>
+    <div class="jpl">
+      <div class="jp jp-hub"><span>AdmVisits</span><span class="arr">⇄</span><span>RegAcct_Main</span><code>ON SourceID + VisitID</code><em>1:1 encounter spine</em></div>
+      ${visMembers.map(m => { const s = spineOf(m.name); return `<div class="jp"><span>${esc(s)}</span><span class="arr">→</span><span>${esc(m.name)}</span><code>ON SourceID + VisitID</code><em>1:N</em></div>`; }).join("")}
+    </div>` : "";
+  const metaChips = [
+    t.sp ? `${esc(planName(t))} <em>· ${esc(procName(t))}</em>` : (t.avail === "Yes" ? "No dedicated SP plan yet" : "Not available"),
+    `${members.length} source tables`,
+    keys.length ? keys.join(" · ") : "SourceID + PatientID",
+    t.sp ? `→ CDIO_MeditechDB.dbo.${esc(outFull(t))}` : "",
+  ].filter(Boolean);
+  const sql = t.sp ? valSql(t, members, anchor) : null;
+  return `
+  <div class="topic-block" id="topic-${t.id}" style="--tone:${color}">
+    <div class="topic-head">
+      <div class="tone-line"></div>
+      <div>
+        <h2>${esc(t.name)}</h2>
+        <p>${esc(t.desc)}</p>
+        <div class="sp-meta">${metaChips.map(c => `<span class="chip" style="color:${color}">${c}</span>`).join("")}</div>
+        ${t.note ? `<p class="t-note">${esc(t.note)}</p>` : ""}
+      </div>
+      <a class="btn ghost sm" href="explorer.html#topic=${encodeURIComponent(t.id)}">Explore in constellation →</a>
+    </div>
+    <div class="sp-plan">
+      <div class="sp-col">
+        <h4>Source tables (${members.length})${hubMember ? "" : " · all anchor to " + esc(anchor)}</h4>
+        <div class="sp-tbl">${cards}</div>
+      </div>
+      <div class="sp-col">
+        <h4>Join plan${internal.length ? " (" + internal.length + " explicit joins)" : ""}</h4>
+        <div class="jpl">
+          ${hubMember ? "" : `<div class="jp jp-hub"><span>${esc(anchor)}</span><span class="arr">→</span><span>every table</span><code>ON SourceID + PatientID</code><em>hub star</em></div>`}
+          ${joins}
+        </div>
+        ${visitSpine}
+      </div>
+    </div>
+    ${sql ? `
+    <details class="sql-card">
+      <summary>Validation SQL · ${esc(planName(t))}</summary>
+      <pre class="sql-code"><code>${esc(sql)}</code></pre>
+      <button class="btn ghost sm copy-btn" data-sql="${esc(sql)}">Copy SQL</button>
+    </details>
+    <details class="sql-card" style="margin-top:14px">
+      <summary>Trace one patient · SP output vs sources</summary>
+      <div class="trace-row">
+        <input class="trace-pid" type="text" placeholder="Enter one PatientID, e.g. 123456789" spellcheck="false" autocomplete="off">
+        <button class="btn ghost sm trace-btn">Generate trace SQL</button>
+      </div>
+      <pre class="sql-code"><code class="trace-code"></code></pre>
+      <button class="btn ghost sm copy-btn trace-copy" data-sql="">Copy SQL</button>
+    </details>` : `
+    <div class="na-note">No FCAP1A stored-procedure plan yet${t.note ? " — " + esc(t.note) : ""}. Source tables above still describe the data and its join keys.</div>`}
+  </div>`;
+}
+
+Promise.all([
+  fetch("data/schema.js?v=3").then(r => r.text()),
+  fetch("data/phases.js?v=1").then(r => r.text()),
+]).then(([s, p]) => {
+  const m = s.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
+  const pm = p.match(/window\.SCHEMA_PHASES\s*=\s*(\{.*\});/s);
+  if (!m || !pm) throw new Error("no schema/phase data");
   const d = JSON.parse(m[1]);
-  const tables = d.tables, rels = d.rels, topics = d.topics;
-  const root = $("#topics");
-  if (!topics || !tables) return;
+  const pd = JSON.parse(pm[1]);
+  const tables = d.tables, rels = d.rels;
+  const root = $("#phases");
+  if (!tables || !pd.phases) return;
 
-  const plan = topics
-    .map(topic => {
-      const members = Object.values(tables).filter(t => t.topic === topic.id && t.role !== "cohort")
-        .sort((a, b) => (ZONE_ORDER.indexOf(a.zone) - ZONE_ORDER.indexOf(b.zone)) || a.name.localeCompare(b.name));
-      const internal = rels.filter(r => r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
-      const anchor = (members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
-      return {topic, members, internal, anchor};
-    })
-    .filter(p => p.members.length > 0);
+  const allTopics = [];
+  pd.phases.forEach(ph => ph.topics.forEach(t => allTopics.push({ph, t})));
 
-  $("#tpN").textContent = plan.length;
-  $("#tpTbls").textContent = plan.reduce((a, p) => a + p.members.length, 0);
-  $("#tpRels").textContent = rels.length;
-  $("#tpVisit").textContent = plan.reduce((a, p) => a + p.members.filter(hasVisitID).length, 0);
+  $("#tpPhases").textContent = pd.phases.length;
+  $("#tpN").textContent = allTopics.length;
+  $("#tpTbls").textContent = allTopics.reduce((a, {t}) => a + t.tables.length, 0);
+  $("#tpSP").textContent = allTopics.filter(({t}) => t.sp).length;
+  $("#tpVisit").textContent = allTopics.reduce((a, {t}) => a + t.tables.filter(n => (tables[n] || {}).cols && hasVisitID(tables[n])).length, 0);
   const allKeys = new Set();
-  plan.forEach(p => p.internal.forEach(r => allKeys.add(r.on)));
+  rels.forEach(r => allKeys.add(r.on));
   allKeys.add("SourceID + PatientID");
   allKeys.add("SourceID + VisitID");
   $("#tpKeys").textContent = allKeys.size;
 
-  root.innerHTML = plan.map(({topic, members, internal, anchor}) => {
-    const out = outName(topic.id);
-    const dom = out.replace("_Extended", "");
-    const visMembers = members.filter(hasVisitID);
-    const keys = [...new Set([...internal.map(r => r.on), ...(visMembers.length ? ["SourceID + VisitID"] : [])])];
-    const hubMember = members.some(x => x.name === anchor);
-    const cards = members.map(t => `
-      <div class="sp-card">
-        <div class="n"><a href="explorer.html#tbl=${encodeURIComponent(t.name)}">${esc(t.name)}</a></div>
-        <div class="l">${esc(t.label || t.desc || "")}</div>
-        <div class="k"><span class="chip" style="color:${topic.color}">${ZONE[t.zone] || (t.zone || "").toUpperCase()}</span>${hasVisitID(t) ? `<span class="chip" style="color:var(--warn)">VisitID</span>` : ""}<span>${t.cols.length} cols</span></div>
-      </div>`).join("");
-    const joins = internal.length
-      ? internal.map(r => `
-        <div class="jp"><span>${esc(r.from)}</span><span class="arr">→</span><span>${esc(r.to)}</span><code>ON ${esc(r.on)}</code><em>${esc(r.card)}</em></div>`).join("")
-      : `<div class="jp jp-hub"><span>${esc(members.map(x => x.name).slice(0, 3).join(", "))}${members.length > 3 ? " …" : ""}</span><span class="arr">→</span><span>${esc(anchor)}</span><code>ON SourceID + PatientID</code><em>star join</em></div>`;
-    const visitSpine = visMembers.length ? `
-      <h4 style="margin-top:1.05rem">Visit / encounter spine · ${visMembers.length} visit-grained</h4>
-      <div class="jpl">
-        <div class="jp jp-hub"><span>AdmVisits</span><span class="arr">⇄</span><span>RegAcct_Main</span><code>ON SourceID + VisitID</code><em>1:1 encounter spine</em></div>
-        ${visMembers.map(t => { const s = spineOf(t.name); return `<div class="jp"><span>${esc(s)}</span><span class="arr">→</span><span>${esc(t.name)}</span><code>ON SourceID + VisitID</code><em>1:N</em></div>`; }).join("")}
-      </div>` : "";
-    return `
-    <div class="topic-block" style="--tone:${topic.color}" id="topic-${topic.id}">
-      <div class="topic-head">
-        <div class="tone-line"></div>
+  const toc = pd.phases.map(ph =>
+    `<a href="#phase-${ph.id}" style="--tone:${PHCOLOR[ph.id] || "#2f6bff"}">${esc(ph.name)}<b>${ph.topics.length} topics · ${ph.topics.filter(t => t.sp).length} SP</b></a>`).join("");
+  const body = pd.phases.map(ph => `
+    <div class="phase-block" id="phase-${ph.id}">
+      <div class="phase-head" style="--tone:${PHCOLOR[ph.id] || "#2f6bff"}">
         <div>
-          <h2>${esc(topic.name)}</h2>
-          <p>${esc(topic.desc)}</p>
-          <div class="sp-meta">
-            <span class="chip" style="color:${topic.color}">sp_FCAP1A_${esc(dom)}</span>
-            <span class="chip" style="color:${topic.color}">${members.length} source tables</span>
-            <span class="chip" style="color:${topic.color}">${keys.length ? keys.join(" · ") : "SourceID + PatientID"}</span>
-            <span class="chip" style="color:${topic.color}">→ CDIO_MeditechDB.dbo.tbl_FCAP1A_${esc(out)}</span>
-          </div>
+          <div class="section-title">${esc(ph.name)}</div>
+          <h2>${ph.topics.length} data topics${ph.topics.some(t => t.sp) ? ` · ${ph.topics.filter(t => t.sp).length} FCAP1A SP plans` : " · no SP plans yet"}</h2>
         </div>
-        <a class="btn ghost sm" href="explorer.html#topic=${encodeURIComponent(topic.id)}">Explore in constellation →</a>
+        <span class="chip" style="color:${PHCOLOR[ph.id] || "#2f6bff"}">${ph.topics.filter(t => t.tables.length).length} with source tables · ${ph.topics.filter(t => !t.tables.length).length} external/future</span>
       </div>
-      <div class="sp-plan">
-        <div class="sp-col">
-          <h4>Source tables (${members.length})${hubMember ? "" : " · all anchor to " + esc(anchor)}</h4>
-          <div class="sp-tbl">${cards}</div>
-        </div>
-        <div class="sp-col">
-          <h4>Join plan${internal.length ? " (" + internal.length + " explicit joins)" : ""}</h4>
-          <div class="jpl">
-            ${hubMember ? "" : `<div class="jp jp-hub"><span>${esc(anchor)}</span><span class="arr">→</span><span>every table</span><code>ON SourceID + PatientID</code><em>hub star</em></div>`}
-            ${joins}
-          </div>
-          ${visitSpine}
-        </div>
-      </div>
-      <details class="sql-card">
-        <summary>Validation SQL · ${esc(spName(topic.id))}</summary>
-        <pre class="sql-code"><code>${esc(valSql(topic, members, anchor))}</code></pre>
-        <button class="btn ghost sm copy-btn" data-sql="${esc(valSql(topic, members, anchor))}">Copy SQL</button>
-      </details>
-      <details class="sql-card" style="margin-top:14px">
-        <summary>Trace one patient · SP output vs sources</summary>
-        <div class="trace-row">
-          <input class="trace-pid" type="text" placeholder="Enter one PatientID, e.g. 123456789" spellcheck="false" autocomplete="off">
-          <button class="btn ghost sm trace-btn">Generate trace SQL</button>
-        </div>
-        <pre class="sql-code"><code class="trace-code"></code></pre>
-        <button class="btn ghost sm copy-btn trace-copy" data-sql="">Copy SQL</button>
-      </details>
-    </div>`;
-  }).join("");
+      <div class="phase-grid">${ph.topics.map(t => topicBlock(ph, t, tables, rels)).join("")}</div>
+    </div>`).join("");
+
+  root.innerHTML = `<div class="phase-toc">${toc}</div>${body}`;
+
+  const planById = {};
+  allTopics.forEach(({ph, t}) => planById["topic-" + t.id] = {topic: t, tables});
+
+  root.addEventListener("click", ev => {
+    const btn = ev.target.closest(".trace-btn");
+    if (!btn) return;
+    const block = btn.closest(".topic-block");
+    const key = block.id;
+    const p = {topic: planById[key].topic, members: t => 0};
+    p.members = (planById[key].tables ? planById[key].topic.tables.map(n => tables[n]).filter(Boolean) : []);
+    p.anchor = (p.members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
+    const inp = block.querySelector(".trace-pid");
+    const pid = (inp.value || "").trim();
+    if (!pid){ inp.focus(); return; }
+    const sql = traceForPatient(p, pid);
+    if (!sql) return;
+    block.querySelector(".trace-code").textContent = sql;
+    const cb = block.querySelector(".trace-copy");
+    cb.setAttribute("data-sql", esc(sql));
+    cb.textContent = "Copy SQL";
+  });
 
   document.querySelectorAll(".sql-card .copy-btn").forEach(b => {
     b.addEventListener("click", () => {
@@ -259,66 +325,47 @@ fetch("data/schema.js?v=3").then(r => r.text()).then(t => {
     });
   });
 
-  /* trace one patient wiring */
-  const planById = {};
-  plan.forEach(p => planById[p.topic.id] = p);
-  root.addEventListener("click", ev => {
-    const btn = ev.target.closest(".trace-btn");
-    if (!btn) return;
-    const block = btn.closest(".topic-block");
-    const p = planById[block.id.replace("topic-", "")];
-    if (!p) return;
-    const inp = block.querySelector(".trace-pid");
-    const pid = (inp.value || "").trim();
-    if (!pid){ inp.focus(); return; }
-    const sql = traceForPatient(p, pid);
-    block.querySelector(".trace-code").textContent = sql;
-    const cb = block.querySelector(".trace-copy");
-    cb.setAttribute("data-sql", esc(sql));
-    cb.textContent = "Copy SQL";
-  });
-
-  /* filter topics / source tables */
   const tpSearch = $("#tpSearch");
   const tpSearchCount = $("#tpSearchCount");
   const applyTpFilter = () => {
     const q = (tpSearch.value || "").trim().toLowerCase();
-    let shown = 0, shownTbls = 0, total = 0;
-    document.querySelectorAll("#topics .topic-block").forEach(bl => {
-      const headTxt = (bl.querySelector(".topic-head h2")?.textContent || "").toLowerCase();
-      const metaTxt = (bl.querySelector(".sp-meta")?.textContent || "").toLowerCase();
-      let vis = 0;
-      bl.querySelectorAll(".sp-card").forEach(card => {
-        const m = card.textContent.toLowerCase().includes(q);
-        card.style.display = m ? "" : "none";
-        if (m) vis++;
+    let shown = 0, shownTbls = 0, total = 0, shownPhases = 0;
+    document.querySelectorAll(".phase-block").forEach(ph => {
+      let vis = 0, phTbls = 0;
+      ph.querySelectorAll(".topic-block").forEach(bl => {
+        const txt = (bl.textContent || "").toLowerCase();
+        const hit = !q || txt.includes(q);
+        bl.style.display = hit ? "" : "none";
+        if (hit) vis++;
       });
-      total += bl.querySelectorAll(".sp-card").length;
-      const showBlk = !q || vis > 0 || headTxt.includes(q) || metaTxt.includes(q);
-      bl.style.display = showBlk ? "" : "none";
-      if (showBlk){ shown++; shownTbls += vis || (q ? 0 : bl.querySelectorAll(".sp-card").length); }
+      ph.querySelectorAll(".topic-block").forEach(bl => {
+        if (bl.style.display !== "none") phTbls += bl.querySelectorAll(".sp-card").length;
+      });
+      total += ph.querySelectorAll(".topic-block").length;
+      const showPh = !q || vis > 0;
+      ph.style.display = showPh ? "" : "none";
+      if (showPh){ shownPhases++; shown += vis; shownTbls += phTbls; }
     });
-    tpSearchCount.textContent = q ? (shownTbls + " of " + total + " tables · " + shown + " topics") : "";
+    tpSearchCount.textContent = q ? (shownTbls + " tables · " + shown + " topics · " + shownPhases + " phases") : "";
   };
   if (tpSearch) tpSearch.addEventListener("input", applyTpFilter);
 
-  /* shareable deep link: topics.html#topic-<id> or #<id> */
   const openTopicsHash = () => {
     const h = location.hash.replace(/^#/, "");
     if (!h) return;
     const id = h.startsWith("topic-") ? h.slice(6) : h;
-    const bl = document.getElementById("topic-" + id) || document.getElementById(h);
-    if (!bl) return;
-    bl.scrollIntoView({ behavior: "smooth", block: "start" });
-    bl.classList.add("flash");
-    setTimeout(() => bl.classList.remove("flash"), 2000);
-    const d = bl.querySelector("details.sql-card");
+    const el = document.getElementById("topic-" + id) || document.getElementById(h) || document.getElementById("phase-" + id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 2000);
+    const d = el.querySelector("details.sql-card");
     if (d) d.setAttribute("open", "");
   };
   window.addEventListener("hashchange", openTopicsHash);
   openTopicsHash();
 }).catch(() => {
-  $("#topics").innerHTML = '<div class="topic-loading">Could not load data/schema.js?v=3.</div>';
+  $("#phases").innerHTML = '<div class="topic-loading">Could not load data/schema.js or data/phases.js.</div>';
 });
 </script>
 </body>

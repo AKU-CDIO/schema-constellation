@@ -17,10 +17,10 @@ with sync_playwright() as p:
     print("total zone chips:", visChips)
     visitChips = pg.evaluate("Array.from(document.querySelectorAll('.sp-card .chip')).filter(c => c.textContent === 'VisitID').length")
     print("VisitID chips on cards:", visitChips)
-    d = pg.evaluate("document.querySelector('#sp-diagnosis').textContent")
+    d = pg.evaluate("document.querySelector('#topic-diagnosis').textContent")
     print("diagnosis block has AdmVisits -> AbsAcct_Diagnoses:", 'AbsAcct_Diagnoses' in d and 'SourceID + VisitID' in d)
     # validation SQL contains visit grain + visits contract
-    sql = pg.evaluate("document.querySelector('#sp-diagnosis details pre')?.textContent || ''")
+    sql = pg.evaluate("document.querySelector('#topic-diagnosis details pre')?.textContent || ''")
     print("diag sql has VISIT GRAIN:", 'VISIT GRAIN' in sql, "| has Visits contract:", 'COUNT(DISTINCT VisitID)' in sql)
     # cross-sp visit linkage card
     x = pg.evaluate("document.querySelector('#xsp').textContent")

@@ -31,17 +31,17 @@ with sync_playwright() as p:
 
     # --- topics.html search + trace + deep link ---
     pg.goto(BASE + "/topics.html", wait_until="networkidle")
-    pg.wait_for_selector("#topics .topic-block")
-    t_cards = pg.eval_on_selector_all("#topics .sp-card", "els => els.length")
-    t_blocks = pg.eval_on_selector_all("#topics .topic-block", "els => els.length")
+    pg.wait_for_selector("#phases .topic-block")
+    t_cards = pg.eval_on_selector_all("#phases .sp-card", "els => els.length")
+    t_blocks = pg.eval_on_selector_all("#phases .topic-block", "els => els.length")
     pg.fill("#tpSearch", "AdmVitalSigns")
     pg.wait_for_timeout(300)
-    tvis_cards = pg.eval_on_selector_all("#topics .sp-card", "els => els.filter(e => e.offsetParent !== null).length")
-    tvis_blocks = pg.eval_on_selector_all("#topics .topic-block", "els => els.filter(e => e.offsetParent !== null).length")
+    tvis_cards = pg.eval_on_selector_all("#phases .sp-card", "els => els.filter(e => e.offsetParent !== null).length")
+    tvis_blocks = pg.eval_on_selector_all("#phases .topic-block", "els => els.filter(e => e.offsetParent !== null).length")
     pg.fill("#tpSearch", "")
 
     # trace one patient
-    first = pg.query_selector("#topics .topic-block")
+    first = pg.query_selector("#phases .topic-block")
     details_els = first.query_selector_all("details.sql-card")
     details_els[1].query_selector("summary").click()  # open trace details
     pg.wait_for_timeout(200)
@@ -61,8 +61,8 @@ with sync_playwright() as p:
     # deep link topics#encounter
     pg.evaluate("location.hash = 'encounter'")
     pg.wait_for_timeout(500)
-    t_hl = pg.eval_on_selector_all("#topics .topic-block.flash", "els => els.length")
-    t_first_open = pg.eval_on_selector_all("#topics .topic-block details.sql-card[open]", "els => els.length")
+    t_hl = pg.eval_on_selector_all("#phases .topic-block.flash", "els => els.length")
+    t_first_open = pg.eval_on_selector_all("#phases .topic-block details.sql-card[open]", "els => els.length")
 
     b.close()
 

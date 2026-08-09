@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AKU CDIO MAYO · Meditech Star Schema Explorer</title>
-<link rel="stylesheet" href="assets/site.css?v=4">
+<link rel="stylesheet" href="assets/site.css?v=6">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <meta name="description" content="Interactive star-schema constellation of the AKU Meditech EMR: click a table to see its neighbours, join keys (patient vs visit grain) and relationships, with a VisitID-only filter.">
 <meta property="og:type" content="website">
@@ -361,154 +361,71 @@
   </div>
 </div>
 
-<script src="data/schema.js?v=3"></script>
+<script src="data/schema.js?v=4"></script>
+<script src="data/phases.js?v=2"></script>
 <script>
 "use strict";
 const DATA = window.SCHEMA_DATA || {};
+const PHDATA = window.SCHEMA_PHASES || {};
 const $ = (s, r=document) => r.querySelector(s);
 
 /* ============================= Data Topic Availability.docx =============================
    Every topic + availability status + example source tables from
    "Data Topic Availability.docx". at = AKULiveATdb tables, nd = AKULivendb tables. */
-const DOC_TOPICS = [
-  { p:"Phase 1 · Core Clinical Data", items:[
-    { t:"ADT (Admit, Discharge, Transfer)", a:"Yes", at:["AbsAccess_CoderWorklistGroups"], nd:["AdmBedDetails","AdmBedReservations","AdmVisitAppointments"] },
-    { t:"Allergies", a:"Yes", at:["CwsApptProc_AllergenRestrictions","CwsApptProc_AllergenRestrictions_AllergenText","EmrParam_Main_AllergenLabel"], nd:["AdmAllergies","DMisAllergenDrugIngredCodes","DMisAllergenDrugIngredReplaced"] },
-    { t:"Clinical Documents / Notes", a:"Yes", at:["AbsAccess_CollectionNoteAppls","AbsParam_BarCollectionNotesCats","AbsUserPref_CoderNoteTexts"], nd:["AdmVisitCollectionNotes","AdmVisitCollectionNoteText","DBbkPromptDocumentationText"] },
-    { t:"Diagnosis", a:"Yes", at:["AbsAcct_Diagnoses","AbsAcct_DiagnosesAltCodeRids","AbsAcct_DiagnosesGrouper"], nd:["AdmVisitDiagnoses","AdmVisitDiagnosesCs","AdmVisitDiagnosisAudit"] },
-    { t:"Encounter Data", a:"Yes", at:["AbsAcct_AbsAttendProviders","AbsAcct_AbsInquirySource","AbsAcct_ApcDates"], nd:["AdmVisitAppointments","AdmVisitAuthorizations","AdmVisitClinicalAlerts"] },
-    { t:"Flowsheet - Vitals", a:"Yes", at:["CpoeFlwFlowSheets","CpoeFlwFlowSheetProps","CpoeFlwVitalSigns"], nd:["AdmVisitVitals","AdmVisitVitalsAudit"] },
-    { t:"Immunizations", a:"Yes", at:["EmrPat_Immunizations","EmrPat_Immunizations_Comment"], nd:["AdmImmunizations","AdmImmunizationOrders"] },
-    { t:"Lab Results", a:"Yes", at:["LabOrd_Main","LabRes_Main","LabRes_Observation"], nd:["LabResComponent","LabResObservationText","LabSpecimen"] },
-    { t:"Medications", a:"Yes", at:["EmrAcctPha_MedOrders","EmrAcctPha_MedAdministrations","EmrAcctPha_MedComponents"], nd:["AdmMedicationOrders","AdmMAR","AdmMedAdministration"] },
-    { t:"Pathology Reports", a:"Yes", at:["PatPathologyHeader","PatPathologyResult","PatPathologyText"], nd:[] },
-    { t:"Patient Demographics", a:"Yes", at:["HimRec_Main","EmrPat_Main","EmrPat_Ids"], nd:["AdmPatient","AdmPatientIds","AdmPatientFlags"] },
-    { t:"Patient Provided Info (PPI)", a:"Yes", at:["EmrPat_SocialHistory","EmrPat_Questionnaire","EmrPat_SDOH"], nd:["AdmSocialHistory","AdmPatientQuestionnaire"] },
-    { t:"Procedures", a:"Yes", at:["AbsAcct_EpisodeProcedures","AbsAcct_OtherProcedures","EmrProcOrders"], nd:["AdmVisitProcedures","AdmSurgicalHistory"] },
-    { t:"Radiology Reports", a:"Yes", at:["EmrAcctRep_Report","EmrAcctRep_Items","RadOrderHeader"], nd:["RadReportText"] },
-    { t:"Problem List", a:"Yes", at:["EmrAcctData_VisitProblems"], nd:[] },
-  ]},
-  { p:"Phase 2 · Operational & Ancillary", items:[
-    { t:"Appointments", a:"Yes", at:["ApptSchedule","AbsAcct_ApptInfo"], nd:["AdmAppointments","AdmApptSlots"] },
-    { t:"Claims Data", a:"Yes", at:["AbsAcct_ClaimHeader","AbsAcct_ClaimLines"], nd:["AdmClaims","AdmClaimLines"] },
-    { t:"ECG & Echo", a:"Yes", at:["CardECGHeader","CardEchoStudy"], nd:[] },
-    { t:"Family Medical History", a:"Yes", at:["EmrPat_FamilyHistory"], nd:[] },
-    { t:"Infusions", a:"Yes", at:["EmrAcctPha_Infusions"], nd:[] },
-    { t:"Microbiology", a:"Yes", at:["LabRes_Micro","LabRes_Culture"], nd:["AdmMicroResults"] },
-    { t:"Patient Insurance", a:"Yes", at:["EmrPat_Insurance","PayerPlans"], nd:["AdmPatientInsurance"] },
-    { t:"Patient Provided Info (PPI)", a:"Yes", at:["EmrPat_SocialHistory","EmrPat_Questionnaire"], nd:["AdmSocialHistory","AdmPatientQuestionnaire"] },
-    { t:"Pulmonary Function Test", a:"Yes", at:["PFTStudyHeader"], nd:[] },
-    { t:"RHC Measurements", a:"Yes", at:["RHCCathHeader"], nd:[] },
-    { t:"Social History", a:"Yes", at:["EmrPat_SocialHistory"], nd:["AdmSocialHistory"] },
-    { t:"Surgical Cases", a:"Yes", at:["SurgCaseHeader","SurgCaseEvents"], nd:["AdmSurgicalCase"] },
-    { t:"Treatment Plan", a:"Yes", at:["EmrPlan_Header"], nd:[] },
-    { t:"Medication Orders", a:"Yes", at:["EmrAcctPha_MedOrders"], nd:["AdmMedicationOrders"] },
-    { t:"Procedure Orders", a:"Yes", at:["EmrProcOrders","ProcOrderHeader"], nd:["AdmProcedureOrders"] },
-  ]},
-  { p:"Phase 3 · Imaging & Diagnostics", items:[
-    { t:"DICOM Header", a:"No", note:"DICOM images live outside the Meditech relational DB (external modality).", at:[], nd:[] },
-    { t:"CT", a:"Yes", at:["RadOrderHeader","EmrAcctRep_Report"], nd:["RadReportText"] },
-    { t:"PET", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
-    { t:"MRI", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
-    { t:"Echocardiogram", a:"Yes", at:["CardEchoStudy","CardEchoFindings"], nd:[] },
-    { t:"GI - Endoscopy", a:"Yes", at:["GIEndoscopyHeader"], nd:[] },
-    { t:"Ultrasound", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
-    { t:"Cardiology (Cath) Imaging", a:"Yes", at:["CathLabHeader"], nd:[] },
-    { t:"Mammography", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
-  ]},
-  { p:"Phase 4 · Specialty & Longitudinal", items:[
-    { t:"Digital Pathology", a:"No", note:"Digital pathology images are managed by an external pathology system.", at:[], nd:[] },
-    { t:"Transfusion", a:"Yes", at:["BbkTransfusionHeader","BbkTransfusionEvents"], nd:["BbkTransfusionNotes"] },
-    { t:"OB / Delivery", a:"Yes", at:["OBDeliveryHeader","OBDeliveryEvents"], nd:[] },
-    { t:"Dermatology Imaging", a:"Yes", at:["RadOrderHeader"], nd:["RadReportText"] },
-    { t:"Eye Imaging (Fundus, OCT)", a:"Yes", at:["OphthoImagingHeader"], nd:[] },
-    { t:"Vaccines", a:"Yes", at:["EmrPat_Immunizations"], nd:["AdmImmunizations"] },
-    { t:"Other Clinical Reports", a:"Yes", at:["EmrAcctRep_Report"], nd:["RadReportText"] },
-  ]},
-  { p:"Phase 5 · Extended & Future", items:[
-    { t:"Genomics", a:"No", note:"Genomic sequencing data lives outside the Meditech relational DB.", at:[], nd:[] },
-    { t:"Bio-repositories", a:"No", note:"Biobank/sample repositories are external systems.", at:[], nd:[] },
-    { t:"Registries", a:"Yes", at:["RegistryEnrollment"], nd:[] },
-    { t:"Electrophysiology (EEG)", a:"Yes", at:["NeuroEEGHeader"], nd:[] },
-    { t:"Orders", a:null, at:["EmrProcOrders","EmrAcctPha_MedOrders"], nd:["AdmProcedureOrders","AdmMedicationOrders"] },
-    { t:"X-Ray", a:null, at:["RadOrderHeader"], nd:["RadReportText"] },
-    { t:"Surgical Video", a:null, note:"Surgical video is captured by an external system (not in relational DB).", at:[], nd:[] },
-    { t:"Medical Device", a:null, note:"Device data comes from external medical-device sources.", at:[], nd:[] },
-  ]},
-];
-/* curated-equivalent tables for each Data Topic (see sidebar) so the
-   "Show in graph" button has real, curated tables to display even when
-   the DOCX example tables use uncurated FCAP1A source names */
-const DOC_CUR = {
-  "ADT (Admit, Discharge, Transfer)": ["tbl_FCAP1A_ADT_Extended", "AdmVisits", "AdmittingData"],
-  "Allergies": ["EmrPat_Allergies", "EmrPat_Allergies_AllrgComment", "EmrPat_ExtAllergies", "EmrPat_ExtAllergyMain", "DMisAllergies", "tbl_FCAP1A_Allergies_Extended"],
-  "Clinical Documents / Notes": ["EmrClinDoc_Main", "EmrDocData_Main", "EmrDocData_Note", "EmrDocData_NoteText_Text", "EmrPatSum_Documents", "tbl_FCAP1A_ClinicalNotes_Extended_Merged"],
-  "Diagnosis": ["AbsAcct_Diagnoses", "EmrPat_Problems", "EmrPat_ProblemsMain", "EmrPat_PendingProblems", "EmrPat_OfficeProblems", "EmrPat_HealthConcerns", "MisDx_Main", "MisCpt_Main", "tbl_FCAP1A_Diagnoses_Extended"],
-  "Encounter Data": ["AdmVisits", "AdmittingData", "AdmProviders", "AdmConsultingProviders", "RegAcct_Main", "RegAcct_CustomDataQueries_Queries", "tbl_FCAP1A_Encounters_Extended"],
-  "Flowsheet - Vitals": ["AdmVitalSigns", "EmrGrowthChartAudit_Main", "EmrGrowthChartAudit_DataPoints", "EmrGrowthSet_Main", "tbl_FCAP1A_Flowsheets_Extended"],
-  "Immunizations": ["EmrPat_Vaccines", "EmrPat_VaccinesDoses", "MisVaccine_Main", "MisImmReason_Main", "PhaRxAdminImmunizations", "tbl_FCAP1A_Immunizations_Extended"],
-  "Lab Results": ["LabSpecimenTests", "LabSpecimens", "BbkSpecimenTests", "DLabTest", "EmrPatSum_LabResults", "EmrPatSum_Items", "ItsResult", "tbl_FCAP1A_Labs_Results_Extended"],
-  "Medications": ["PhaRxMedications", "PhaRx", "PhaRxAdministrations", "DPhaDrugData", "DPhaGeneric", "EmrPat_ExtHomeMeds", "EmrPat_ExtHomeMedMain", "PhaPatData", "tbl_FCAP1A_Medications_Extended"],
-  "Pathology Reports": ["PthSpecimens", "PthSpecimenFindingsText", "PthSpecimenFinalSignouts", "PthSpecimenHistologyText", "tbl_FCAP1A_PathologyReports_Extended", "tbl_FCAP1A_PathologyEHR_Extended"],
-  "Patient Demographics": ["HimRec_Main", "HimRec_Data", "HimRec_Address", "MisRace_Main", "MisEthnicity_Main", "HimRec_AdditionalRace", "HimRec_AdditionalEthnicity", "tbl_FCAP1A_Demographics_Extended"],
-  "Patient Provided Info (PPI)": ["tbl_FCAP1A_PatientProvidedInfo_Extended"],
-  "Procedures": ["tbl_FCAP1A_Procedures_Extended"],
-  "Radiology Reports": ["tbl_FCAP1A_RadiologyReport_Extended", "EmrAcctRep_Images"],
-  "Problem List": ["EmrPat_Problems", "EmrPat_ProblemsMain", "EmrPat_PendingProblems", "EmrPat_OfficeProblems", "MisPatProblem_Main"],
-  "Family Medical History": ["EmrPat_FamilyMembers", "EmrPat_FamilyProblems", "EmrPat_FamilyMembers_DeceasedComment", "MisRelat_Main", "tbl_FCAP1A_FamilyMedicalHistory"],
-  "Microbiology": ["DMicProcs", "LabVisitIsolatedOrganisms", "MicSpecimenResultsText", "BbkSpecimenTests", "tbl_FCAP1A_Labs_Microbiology_Findings_Extended", "tbl_FCAP1A_Labs_Microbiology_Comments_Extended"],
-  "Treatment Plan": ["PcsAcct_Plans", "PcsAcct_PlanItems", "PcsAcct_Interventions", "PcsPlan_Main", "PcsAcctAct_PlanActivity", "EmrPatPlan_Problems", "tbl_FCAP1A_TreatmentPlans_Extended"],
-  "Medication Orders": ["PhaRx", "PhaRxMedications", "OmOrd_Main", "OmOrdDict_Main"],
-  "Procedure Orders": ["OmOrd_Main", "OmOrdDict_Main", "tbl_FCAP1A_Orders"],
-  "CT": ["tbl_FCAP1A_RadiologyReport_Extended"],
-  "PET": ["tbl_FCAP1A_RadiologyReport_Extended"],
-  "MRI": ["tbl_FCAP1A_RadiologyReport_Extended"],
-  "Ultrasound": ["tbl_FCAP1A_RadiologyReport_Extended"],
-  "Mammography": ["tbl_FCAP1A_RadiologyReport_Extended"],
-  "Dermatology Imaging": ["tbl_FCAP1A_RadiologyReport_Extended"],
-  "Transfusion": ["tbl_FCAP1A_Labs_BloodBank_Extended"],
-  "Vaccines": ["EmrPat_Vaccines", "EmrPat_VaccinesDoses", "MisVaccine_Main", "MisImmReason_Main"],
-  "Other Clinical Reports": ["EmrDocData_Main", "EmrPatSum_Documents", "tbl_FCAP1A_ClinicalNarrative_Extended"],
-  "Registries": ["EmrPatRegistry_Main", "EmrPatRegistry_ChronicConds", "EmrPatRegistry_LastLabResults"],
-  "Orders": ["OmOrd_Main", "OmOrdDict_Main", "OmCat_Main", "OmGrp_Main", "tbl_FCAP1A_Orders"],
-  "X-Ray": ["tbl_FCAP1A_RadiologyReport_Extended"],
-};
-function docCurated(t){
-  if (t.cur) return t.cur.filter(n => isSource(n));
-  if (DOC_CUR[t.t]) return DOC_CUR[t.t].filter(n => isSource(n));
-  return (t.at || []).concat(t.nd || []).filter(n => isSource(n));
+/* ===================== Data Topic Availability.docx → merged phases.js =====================
+   The 5 phases × 54 topics come from data/phases.js (the merged Data Topic Availability
+   doc + curated SP plans). Each topic carries its real curated source tables and, where an
+   FCAP1A build SP exists, the proc/output names from the actual usp_Build_*.sql files.
+   Availability: "Yes" → SP-covered or covered by another build; "No" → external / not in set. */
+const PHCOLOR = {core:"#2f6bff", ops:"#7c3aed", imaging:"#059669", specialty:"#d97706", future:"#db2777"};
+const PHASES = (PHDATA.phases || []).map(ph => ({
+  p: ph.name,
+  color: PHCOLOR[ph.id] || "#2f6bff",
+  items: (ph.topics || []).map(t => ({
+    id: t.id,
+    t: t.name,
+    a: (t.avail === "No" || (t.tables && t.tables.length === 0)) ? "No" : "Yes",
+    note: t.note || "",
+    sp: t.sp || null,
+    tables: (t.tables || []).slice(),
+  })),
+}));
+const PH_TOPICS = PHASES.flatMap(g => g.items);
+const phById = id => PH_TOPICS.find(x => x.id === id);
+function phCurated(item){
+  const out = [];
+  (item.tables || []).forEach(n => { if (DATA.tables[n] && isSource(n)) out.push(n); });
+  return out;
 }
-function docAvailCls(a){ return a === "Yes" ? "yes" : a === "No" ? "no" : "na"; }
-function docAvailTxt(a){ return a === "Yes" ? "Yes" : a === "No" ? "No" : "—"; }
+const docAvailCls = a => a === "Yes" ? "yes" : a === "No" ? "no" : "na";
+const docAvailTxt = a => a === "Yes" ? "Yes" : a === "No" ? "No" : "—";
 
 /* ===================== SP generation plan (shared with the SP Workspace page) ===================== */
-const SPOUT = {identity:"Demographics",encounter:"Encounters",diagnosis:"Diagnoses",medication:"Medications",allergy:"Allergies",immunization:"Immunizations",lab:"Labs_Results",family:"FamilyHistory",vitals:"Flowsheets",careplan:"TreatmentPlans",registry:"Registries"};
 const SP_ZONE_ORDER = ["hub","identity","encounter","clinical","clinical_detail","dictionary"];
 const dbOf = n => n === "AdmVisits" ? "AKULivendb" : "AKULiveATdb";
-const outName = id => (SPOUT[id] || id.replace(/\b\w/g, c => c.toUpperCase())) + "_Extended";
-const spName = id => "sp_FCAP1A_" + outName(id).replace("_Extended", "");
 const hasVisitID = t => (t.cols || []).some(c => c.n === "VisitID");
 const keyFamily = on => { const s = String(on || ""); return s.includes("VisitID") ? "kv" : s.includes("PatientID") ? "kp" : "ko"; };
 const spineOf = n => /^(RegAcct_|PcsAcct|OmOrd|Pth|ItsResult|EmrAcctRep)/.test(n) ? "RegAcct_Main" : "AdmVisits";
+const domOfOut = out => out.replace("tbl_FCAP1A_", "").replace("_Extended", "").replace("_Merged", "");
+const phPlanName = item => "sp_FCAP1A_" + domOfOut(item.sp.out);
+const phProcName = item => "usp_Build_" + item.sp.name;
 
-function spPlanOf(topicId){
-  const topic = DATA.topics.find(x => x.id === topicId);
-  if (!topic) return null;
-  const members = Object.values(DATA.tables).filter(t => t.topic === topicId && t.role !== "cohort")
+function spPlanOfPh(item){
+  if (!item.sp) return null;
+  const members = item.tables.map(n => DATA.tables[n]).filter(Boolean)
     .sort((a, b) => (SP_ZONE_ORDER.indexOf(a.zone) - SP_ZONE_ORDER.indexOf(b.zone)) || a.name.localeCompare(b.name));
   if (!members.length) return null;
   const internal = DATA.rels.filter(r => r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
   const anchor = (members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
-  return { topic, members, internal, anchor };
+  return { item, members, internal, anchor, out: item.sp.out, plan: phPlanName(item), proc: phProcName(item) };
 }
 
 function spValSql(p){
-  const out = outName(p.topic.id);
-  const dom = out.replace("_Extended", "");
+  const out = p.out, dom = domOfOut(out);
   const L = [];
   L.push(`-- ============================================================`);
-  L.push(`-- SP PLAN    : ${spName(p.topic.id)}`);
-  L.push(`-- OUTPUT     : CDIO_MeditechDB.dbo.tbl_FCAP1A_${out}`);
+  L.push(`-- SP PLAN    : ${p.plan}  (proc ${p.proc})`);
+  L.push(`-- OUTPUT     : CDIO_MeditechDB.dbo.${out}`);
   L.push(`-- SOURCES    : ${p.members.length} tables (${dbOf(p.members[0].name)} + AKULivendb)`);
   L.push(`-- ============================================================`);
   L.push(`--`);
@@ -528,20 +445,15 @@ function spValSql(p){
   p.members.filter(t => t.name !== p.anchor).forEach(t => L.push(`SELECT COUNT(*) AS Orphans FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(p.anchor)}.dbo.${p.anchor} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE h.PatientID IS NULL;`));
   L.push(`--`);
   L.push(`-- (4) OUTPUT CONTRACT - run AFTER the build`);
-  L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients, COUNT(DISTINCT VisitID) AS Visits FROM CDIO_MeditechDB.dbo.tbl_FCAP1A_${out};`);
+  L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients, COUNT(DISTINCT VisitID) AS Visits FROM CDIO_MeditechDB.dbo.${out};`);
   L.push(`--`);
   L.push(`-- (5) CROSS-SP - this output must be a subset of the Demographics universe`);
-  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.tbl_FCAP1A_${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
+  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
   return L.join("\n");
 }
 
-function spDomainsOfDocTopic(t){
-  const ids = new Set();
-  docCurated(t).forEach(n => { const tb = DATA.tables[n]; if (tb && tb.topic && tb.role !== "cohort") ids.add(tb.topic); });
-  return [...ids];
-}
-
 function spSectionHTML(p){
+  const color = p.item.color || "#2f6bff";
   const vis = p.members.filter(hasVisitID);
   const joins = p.internal.length
     ? p.internal.map(r => `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl" style="font-size:11.5px">${esc(r.from)}</span><span class="qs-arr">→</span><span class="qs-tbl" style="font-size:11.5px">${esc(r.to)}</span><span class="qs-on">on ${esc(r.on)} · ${esc(r.card)}</span></div>`).join("")
@@ -551,16 +463,16 @@ function spSectionHTML(p){
       <div class="qstep" style="padding:7px 10px"><span class="qs-tbl">AdmVisits</span><span class="qs-arr">⇄</span><span class="qs-tbl">RegAcct_Main</span><span class="qs-on">on SourceID + VisitID · 1:1 encounter spine</span></div>
       ${vis.map(t => { const s = spineOf(t.name); return `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl">${esc(s)}</span><span class="qs-arr">→</span><span class="qs-tbl">${esc(t.name)}</span><span class="qs-on">on SourceID + VisitID · 1:N</span></div>`; }).join("")}
     </div>` : "";
-  const tables = p.members.map(t => `<span class="chip" style="background:${p.topic.color}1f;border-color:${p.topic.color}55;color:${p.topic.color};cursor:pointer" data-sptbl="${esc(t.name)}">${esc(t.name)}</span>`).join(" ");
+  const tables = p.members.map(t => `<span class="chip" style="background:${color}1f;border-color:${color}55;color:${color};cursor:pointer" data-sptbl="${esc(t.name)}">${esc(t.name)}</span>`).join(" ");
   return `
     <div class="sec" style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
       <h3 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span>SP Generation Plan</span>
-        <span class="chip" style="background:${p.topic.color}1a;border-color:${p.topic.color}55;color:${p.topic.color}">${esc(spName(p.topic.id))}</span>
+        <span class="chip" style="background:${color}1a;border-color:${color}55;color:${color}">${esc(p.plan)}</span>
       </h3>
-      <div class="dl" style="margin-top:6px">Output: <b>CDIO_MeditechDB.dbo.tbl_FCAP1A_${esc(outName(p.topic.id))}</b> · ${p.members.length} source tables</div>
+      <div class="dl" style="margin-top:6px">Output: <b>CDIO_MeditechDB.dbo.${esc(p.out)}</b> · ${p.members.length} source tables</div>
       <div class="sqlbox" style="margin-top:10px"><div style="display:flex;flex-wrap:wrap;gap:5px">${tables}</div></div>
-      <div class="sec" style="margin-top:14px"><h3>Join plan · ${esc(p.topic.name)}</h3>${joins}</div>
+      <div class="sec" style="margin-top:14px"><h3>Join plan · ${esc(p.item.t)}</h3>${joins}</div>
       ${spine}
       <div class="sec" style="margin-top:14px"><h3>Quick validation · generated SQL</h3>
         <div class="badges" style="margin:0 0 8px">
@@ -570,9 +482,10 @@ function spSectionHTML(p){
         </div>
         <div class="sqlbox"><pre>${esc(spValSql(p))}</pre></div>
       </div>
-      <a class="focusbtn" href="sps.html#sp-${esc(p.topic.id)}" style="text-decoration:none;display:inline-block;margin-top:10px">Open full SP workspace →</a>
+      <a class="focusbtn" href="sps.html#topic-${esc(p.item.id)}" style="text-decoration:none;display:inline-block;margin-top:10px">Open full SP workspace →</a>
     </div>`;
 }
+
 
 /* ============================= state ============================= */
 const state = {
@@ -1451,45 +1364,36 @@ function renderDocTopic(t){
   pushHash("#topic=doc:" + encodeURIComponent(t.t));
   state.selected = null;
   const detail = $("#detail");
-  const phase = DOC_TOPICS.find(g => g.items.includes(t)) || {};
-  const curated = docCurated(t);
+  const grp = PHASES.find(g => g.items.includes(t));
+  const color = (grp && grp.color) || "#2f6bff";
+  const curated = phCurated(t);
   const availChip = t.a === "Yes"
     ? `<span class="chip pk" style="background:rgba(5,150,105,.12);color:#047857;border-color:rgba(5,150,105,.35)">AVAILABLE</span>`
-    : t.a === "No"
-      ? `<span class="chip pk" style="background:rgba(220,38,38,.1);color:#b91c1c;border-color:rgba(220,38,38,.35)">NOT AVAILABLE</span>`
-      : `<span class="chip ext">NOT SPECIFIED</span>`;
-  const list = (arr, db) => {
-    if (!arr || !arr.length) return `<div class="notable">— no example tables listed —</div>`;
-    return arr.map(n => `<div class="cg-tbl" data-n="${esc(n)}">${esc(n)}</div>`).join("");
-  };
+    : `<span class="chip pk" style="background:rgba(220,38,38,.1);color:#b91c1c;border-color:rgba(220,38,38,.35)">NOT AVAILABLE</span>`;
   const curList = curated.length
-    ? `<div class="sec"><h3>Curated equivalents in this explorer</h3>${curated.map(n => `<div class="cg-tbl" data-n="${esc(n)}">${esc(n)}</div>`).join("")}</div>`
-    : "";
-  const query = (t.at || []).length
-    ? `SELECT TOP 10 *\nFROM [NBIDRSRV].[AKULiveATdb].[dbo].[${t.at[0]}];`
-    : (t.nd || []).length
-      ? `SELECT TOP 10 *\nFROM [NBIDRSRV].[AKULivendb].[dbo].[${t.nd[0]}];`
-      : "— no relational validation query —";
+    ? `<div class="sec"><h3>Source tables in this explorer</h3>${curated.map(n => `<div class="cg-tbl" data-n="${esc(n)}">${esc(n)}</div>`).join("")}</div>`
+    : `<div class="sec"><h3>Source tables</h3><div class="notable">— no source tables in the curated FCAP1A set —</div></div>`;
+  const query = curated.length
+    ? `SELECT TOP 10 *\nFROM [NBIDRSRV].[${dbOf(curated[0])}].[dbo].[${curated[0]}];`
+    : "— no relational validation query —";
   const note = t.note ? `<div class="detail-desc">${esc(t.note)}</div>` : "";
   const graphBtn = curated.length
-    ? `<button class="focusbtn" id="docGraphBtn">Show ${curated.length} curated table(s) in the graph</button>`
-    : `<div class="notable" style="margin-top:10px">None of the example tables are in the curated clinical graph — use the <b>catalog</b> or <b>search</b> to open them (they are indexed among the 17,094 catalog tables).</div>`;
-  const spSections = spDomainsOfDocTopic(t).map(id => { const p = spPlanOf(id); return p ? spSectionHTML(p) : ""; }).join("");
+    ? `<button class="focusbtn" id="docGraphBtn">Show ${curated.length} source table(s) in the graph</button>`
+    : "";
+  const spSections = t.sp ? (() => { const p = spPlanOfPh(t); return p ? spSectionHTML(p) : ""; })() : "";
   const spNote = !spSections
-    ? `<div class="notable" style="margin-top:16px">No FCAP1A SP proposal covers this topic yet — see the <a href="sps.html">SP Workspace</a> for the 11 proposed stored procedures.</div>`
+    ? `<div class="notable" style="margin-top:16px">No FCAP1A stored-procedure plan for this topic yet${t.note ? " — " + esc(t.note) : ""}. See the <a href="sps.html">SP Workspace</a> for the SPs that do exist.</div>`
     : "";
   detail.innerHTML = `
-    <div class="crumb"><span class="cb" data-crumb="overview">← Back</span><span>${esc(phase.p || "")}</span></div>
+    <div class="crumb"><span class="cb" data-crumb="overview">← Back</span><span style="color:${color}">${esc((grp && grp.p) || "")}</span></div>
     <div class="detail-head">
-      <h2><span class="ticon" style="color:#b08d2e">${iconSvg("hub", 19)}</span>${esc(t.t)}</h2>
-      <div class="badges">${availChip}</div>
-      <div class="dl">From <b>Data Topic Availability.docx</b> · FCAP1A source tables</div>
+      <h2><span class="ticon" style="color:${color}">${iconSvg("hub", 19)}</span>${esc(t.t)}</h2>
+      <div class="badges">${availChip}${t.sp ? `<span class="chip pk" style="background:${color}1a;border-color:${color}55;color:${color}">SP PLAN</span>` : ""}</div>
+      <div class="dl">From the merged <b>Data Topic Availability</b> phases · FCAP1A curated source tables</div>
       ${note}
     </div>
     <div class="detail-body">
       ${curList}
-      <div class="sec"><h3>AKULiveATdb tables (example)</h3>${list(t.at)}</div>
-      <div class="sec"><h3>AKULivendb tables (example)</h3>${list(t.nd)}</div>
       <div class="sec"><h3>Validation query</h3><div class="sqlbox"><pre>${esc(query)}</pre></div></div>
       ${graphBtn}
       ${spSections || spNote}
@@ -1508,7 +1412,7 @@ function renderDocTopic(t){
 
 function showDocInGraph(t){
   state.docName = t.t;
-  state.docIds = new Set(docCurated(t));
+  state.docIds = new Set(phCurated(t));
   setView("doc");
 }
 
@@ -1568,14 +1472,18 @@ function routeFromHash(){
   closePanels();
   if (h.startsWith("#topic=doc:")) {
     const tn = decodeURIComponent(h.slice(11));
-    const t = DOC_TOPICS.flatMap(g => g.items).find(x => x.t === tn);
+    const t = PH_TOPICS.find(x => x.t === tn);
     if (t) renderDocTopic(t);
     else setView("overview");
   } else if (h.startsWith("#topic=")) {
     const t = decodeURIComponent(h.slice(7));
     const topic = DATA.topics.find(x => x.id === t || x.name === t);
     if (topic) setView("topic", topic.id);
-    else setView("overview");
+    else {
+      const ph = phById(t);
+      if (ph) renderDocTopic(ph);
+      else setView("overview");
+    }
   } else if (h.startsWith("#tbl=")) {
     const name = decodeURIComponent(h.slice(5));
     if (DATA.tables[name]) { setView("table", null, name); renderDetail(name); }
@@ -1687,18 +1595,18 @@ function buildSidebar(){
   });
 
   const dl = $("#doctopics");
-  DOC_TOPICS.forEach(grp => {
+  PHASES.forEach(grp => {
     const gEl = document.createElement("div");
     gEl.className = "catalog-group open";
     const head = document.createElement("div");
     head.className = "cg-head";
-    head.innerHTML = `<span class="arrow">▶</span><span class="cg-name">${esc(grp.p)}</span><span style="margin-left:auto;font-size:10px;color:var(--faint)">${grp.items.length}</span>`;
+    head.innerHTML = `<span class="arrow">▶</span><span class="cg-name">${esc(grp.p)}</span><span style="margin-left:auto;font-size:10px;color:var(--faint)">${grp.items.length} · ${grp.items.filter(x => x.sp).length} SP</span>`;
     const body = document.createElement("div");
     body.className = "cg-tbls";
     grp.items.forEach(it => {
       const row = document.createElement("div");
       row.className = "dtopic";
-      row.innerHTML = `<span class="tname">${esc(it.t)}</span><span class="davail ${docAvailCls(it.a)}">${docAvailTxt(it.a)}</span>`;
+      row.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${grp.color};flex:none"></span><span class="tname">${esc(it.t)}</span>${it.sp ? `<span class="davail yes">SP</span>` : ""}<span class="davail ${docAvailCls(it.a)}">${docAvailTxt(it.a)}</span>`;
       row.addEventListener("click", () => renderDocTopic(it));
       body.appendChild(row);
     });

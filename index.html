@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AKU CDIO MAYO · Meditech Schema Explorer</title>
-<link rel="stylesheet" href="assets/site.css?v=4">
+<link rel="stylesheet" href="assets/site.css?v=6">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <meta name="description" content="Explore the AKU Meditech EMR schema: bird's-eye joins, 11 data topics, source tables, the visit/encounter spine, and the FCAP1A stored-procedure plans — built from the FCAP1A cohort project.">
 <meta property="og:type" content="website">
@@ -34,9 +34,9 @@
   <div class="wrap" style="position:relative">
     <div class="badge"><span class="dot"></span>AKU CDIO MAYO · FCAP1A Cohort · AKULiveATdb</div>
     <h1>See the whole EMR.<br><span class="grad">Then drill to one column.</span></h1>
-    <p class="lead">A bird's-eye map of the Meditech EMR schema — 11 clinical topics, the source tables behind them, the exact join keys, the visit/encounter spine every row anchors to, and the stored-procedure plans that build the FCAP1A cohort.</p>
+    <p class="lead">A bird's-eye map of the Meditech EMR schema — 54 data topics across 5 phases, the source tables behind them, the exact join keys, the visit/encounter spine every row anchors to, and the 19 FCAP1A stored-procedure plans that build the cohort.</p>
     <div class="actions">
-      <a class="btn primary" href="explorer.html">Open the Explorer <span class="arr">â†’</span></a>
+      <a class="btn primary" href="explorer.html">Open the Explorer <span class="arr">→</span></a>
       <a class="btn ghost" href="topics.html">Start with Data Topics</a>
       <a class="btn ghost" href="sql.html">Jump to SQL Cookbook</a>
       <a class="btn ghost" href="sps.html">Review SP Workspace</a>
@@ -77,11 +77,13 @@
     <div class="stats">
       <div class="stat"><b id="stTables">184</b><span>Curated tables</span></div>
       <div class="stat"><b id="stSrc">150</b><span>Source tables</span></div>
-      <div class="stat"><b id="stTopics">11</b><span>Data topics</span></div>
+      <div class="stat"><b id="stTopics">54</b><span>Data topics · 5 phases</span></div>
+      <div class="stat"><b id="stSP">19</b><span>FCAP1A SP plans</span></div>
       <div class="stat"><b id="stRels">266</b><span>Join paths</span></div>
       <div class="stat"><b id="stVisit">67</b><span>Visit-grained sources</span></div>
       <div class="stat"><b id="stCatalog">17,094</b><span>Catalog tables</span></div>
     </div>
+    <div class="phase-rail" id="phaseRail"></div>
   </div>
 </section>
 
@@ -95,12 +97,12 @@
         <div class="ic" style="background:rgba(56,189,248,.12);color:var(--accent)">â—‰</div>
         <h3>Bird's-eye join map</h3>
         <p>Start at the patient hub (HimRec_Main) and trace outward through identity, encounters, the clinical chart and dictionaries. Every edge is labelled with its exact join key.</p>
-        <span class="tag">Pan Â· Zoom Â· Drag</span>
+        <span class="tag">Pan · Zoom · Drag</span>
       </div>
       <div class="card">
-        <div class="ic" style="background:rgba(167,139,250,.12);color:var(--vio)">â‹</div>
-        <h3>Drill into 11 data topics</h3>
-        <p>Identity, encounters, diagnoses, medications, allergies, immunizations, labs, family history, vitals, care plans and registries — each with its source tables and join plan.</p>
+        <div class="ic" style="background:rgba(167,139,250,.12);color:var(--vio)">◎</div>
+        <h3>Drill into 54 data topics</h3>
+        <p>Five phases from core clinical data to imaging, specialty and future domains — each with its curated source tables, join plan and, where an FCAP1A build exists, its stored procedure.</p>
         <span class="tag">Topic drill-down</span>
       </div>
       <div class="card">
@@ -118,7 +120,7 @@
       <div class="card">
         <div class="ic" style="background:rgba(244,114,182,.12);color:var(--bad)">ðŸœš</div>
         <h3>SP Generation Workspace</h3>
-        <p>One stored procedure per data topic. 11 proposed SPs read 150 source tables, anchor every row on the visit/encounter spine (AdmVisits.VisitID), and write the tbl_FCAP1A_*_Extended outputs into CDIO_MeditechDB.</p>
+        <p>One stored procedure per SP-covered topic. 19 FCAP1A SP plans across the five phases read the curated source tables, anchor every row on the visit/encounter spine (AdmVisits.VisitID), and write the tbl_FCAP1A_* outputs into CDIO_MeditechDB.</p>
         <span class="tag">Real lineage</span>
       </div>
       <div class="card">
@@ -139,7 +141,7 @@
     <div class="path">
       <a class="step" href="topics.html" style="text-decoration:none">
         <div class="num" style="background:rgba(56,189,248,.15);color:var(--accent)">1</div>
-        <div><h4>Data Topics</h4><p>Pick one of 11 clinical domains. See its source tables, what each one means, and its join plan to the patient hub.</p></div>
+        <div><h4>Data Topics</h4><p>Pick one of the 54 topics across the five phases. See its source tables, what each one means, and its join plan to the patient hub.</p></div>
       </a>
       <a class="step" href="explorer.html" style="text-decoration:none">
         <div class="num" style="background:rgba(167,139,250,.15);color:var(--vio)">2</div>
@@ -164,7 +166,7 @@
     <div class="grid">
       <div class="card">
         <h3>AKULiveATdb</h3>
-        <p>The live Meditech EMR database — patient master index, clinical chart, orders, dictionaries. 150 source tables behind the 11 data topics live here.</p>
+        <p>The live Meditech EMR database — patient master index, clinical chart, orders, dictionaries. 150 source tables behind the 54 data topics live here.</p>
       </div>
       <div class="card">
         <h3>AKULivendb</h3>
@@ -172,7 +174,7 @@
       </div>
       <div class="card">
         <h3>CDIO_MeditechDB</h3>
-        <p>FCAP1A analytics outputs — the 11 tbl_FCAP1A_*_Extended build tables created by 11 proposed stored procedures, each anchored on the visit spine.</p>
+        <p>FCAP1A analytics outputs — the 19 tbl_FCAP1A_* build tables created by the FCAP1A stored procedures, each anchored on the visit spine.</p>
       </div>
     </div>
   </div>
@@ -180,26 +182,42 @@
 
 <footer>
   <div class="wrap">
-    <span>Schema Constellation Â· generated from the AKU Meditech schema dump + FCAP1A build stored procedures</span>
-    <span class="right"><span>Analysis window: 2022-11-05 â†’ 2026-06-14</span></span>
+    <span>Schema Constellation · generated from the AKU Meditech schema dump + FCAP1A build stored procedures</span>
+    <span class="right"><span>Analysis window: 2022-11-05 → 2026-06-14</span></span>
   </div>
 </footer>
 
 <script>
 const $ = (s,r=document)=>r.querySelector(s);
-fetch("data/schema.js?v=3").then(r=>r.text()).then(t=>{
-  const m = t.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
-  if(!m) return;
+const PHCOLOR = {core:"#2f6bff", ops:"#7c3aed", imaging:"#059669", specialty:"#d97706", future:"#db2777"};
+Promise.all([fetch("data/schema.js?v=4").then(r=>r.text()), fetch("data/phases.js?v=2").then(r=>r.text())]).then(([st, pt])=>{
+  const m = st.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
+  const pm = pt.match(/window\.SCHEMA_PHASES\s*=\s*(\{.*\});/s);
+  if(!m || !pm) return;
   try{
     const d = JSON.parse(m[1]);
+    const pd = JSON.parse(pm[1]);
     const tables = Object.values(d.tables);
     const src = tables.filter(v => v.role !== "cohort");
+    const allTopics = pd.phases.flatMap(ph => ph.topics || []);
     if($("#stTables")) $("#stTables").textContent = tables.length.toLocaleString();
     if($("#stSrc")) $("#stSrc").textContent = src.length;
-    if($("#stTopics")) $("#stTopics").textContent = new Set(src.map(v=>v.topic)).size;
+    if($("#stTopics")) $("#stTopics").textContent = allTopics.length;
+    if($("#stSP")) $("#stSP").textContent = allTopics.filter(t => t.sp).length;
     if($("#stRels")) $("#stRels").textContent = d.rels.length;
     if($("#stVisit")) $("#stVisit").textContent = src.filter(v => (v.cols||[]).some(c=>c.n==="VisitID")).length;
     if($("#stCatalog")) $("#stCatalog").textContent = (d.meta && d.meta.catalog && d.index) ? Object.values(d.index).reduce((a,b)=>a+b.length,0).toLocaleString() : "17,094";
+    const rail = $("#phaseRail");
+    if(rail && pd.phases){
+      rail.innerHTML = pd.phases.map(ph => {
+        const c = PHCOLOR[ph.id] || "#2f6bff";
+        const spN = (ph.topics||[]).filter(t => t.sp).length;
+        return `<a href="topics.html#phase-${ph.id}" class="phase-chip" style="--pc:${c}">
+          <span class="dot" style="background:${c};color:${c}"></span>
+          <span>${ph.name}</span><b>${(ph.topics||[]).length} topics</b>${spN ? `<b class="sp">${spN} SP</b>` : ""}
+        </a>`;
+      }).join("");
+    }
   }catch(e){}
 }).catch(()=>{});
 </script>

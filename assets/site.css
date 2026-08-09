@@ -103,6 +103,15 @@ section{padding:64px 0}
 .stat span{font-size:12.5px;color:var(--faint);letter-spacing:.6px;text-transform:uppercase;font-weight:700}
 @media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr)}}
 
+/* ---------- phase rail (home) ---------- */
+.phase-rail{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.phase-rail .phase-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-left:4px solid var(--pc,#2f6bff);border-radius:10px;padding:7px 12px;background:#fff;font-size:13px;color:var(--txt);text-decoration:none;transition:.15s}
+.phase-rail .phase-chip:hover{border-color:var(--line2);box-shadow:var(--shadow)}
+.phase-rail .phase-chip .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.phase-rail .phase-chip b{font-weight:700;font-size:12px;color:var(--faint)}
+.phase-rail .phase-chip b.sp{color:#059669}
+
+
 /* ---------- feature cards ---------- */
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
 .card{border:1px solid var(--line);border-radius:16px;padding:26px;background:#fff;transition:.2s;position:relative;overflow:hidden;box-shadow:var(--shadow)}
@@ -141,6 +150,28 @@ footer .right{margin-left:auto;display:flex;gap:16px}
 
 /* ---------- topics page ---------- */
 .topic-loading{color:var(--faint);padding:40px 0;font-size:16px}
+.phase-toc{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:34px;position:sticky;top:0;z-index:30;background:rgba(238,242,249,.94);backdrop-filter:blur(6px);padding:12px 0;border-radius:14px}
+.phase-toc a{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-left:4px solid var(--tone,#2f6bff);border-radius:12px;
+  padding:9px 14px;font-weight:800;font-size:14px;color:var(--txt);background:#fff;text-decoration:none;transition:.15s}
+.phase-toc a:hover{border-color:var(--line2);box-shadow:var(--shadow)}
+.phase-toc a b{font-weight:700;font-size:12px;color:var(--faint)}
+.phase-block{margin-bottom:44px;scroll-margin-top:70px}
+.phase-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;border-bottom:3px solid var(--tone,#2f6bff);padding-bottom:12px;margin-bottom:18px;scroll-margin-top:70px}
+.phase-head .section-title{color:var(--tone,#2f6bff)}
+.phase-head h2{font-size:30px;font-weight:800;letter-spacing:-.4px}
+.phase-head .chip{flex:none}
+.phase-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:16px;align-items:start}
+.phase-grid .topic-block{margin-bottom:0}
+.topic-block.na{background:linear-gradient(180deg,#fff,#f7f9fc)}
+.topic-block .t-note{margin-top:10px;font-size:14px;color:var(--faint);background:rgba(245,158,11,.08);border:1px dashed rgba(217,119,6,.4);border-radius:10px;padding:8px 12px;max-width:680px}
+.na-note{font-size:15px;color:var(--faint);background:rgba(148,163,184,.1);border:1px dashed var(--line2);border-radius:12px;padding:14px 16px;line-height:1.55;margin-top:4px}
+.topic-block .topic-head p{max-width:100%}
+.topic-block .sp-plan{display:grid;grid-template-columns:1.25fr .9fr;gap:22px}
+@media (max-width:900px){
+  .phase-grid{grid-template-columns:1fr}
+  .topic-block .sp-plan{grid-template-columns:1fr}
+  .phase-head{flex-direction:column;align-items:flex-start}
+}
 .topic-block{border:1px solid var(--line);border-radius:18px;padding:28px;margin-bottom:26px;background:#fff;box-shadow:var(--shadow)}
 .topic-block .tone-line{width:4px;border-radius:3px;background:var(--tone,#2f6bff);align-self:stretch;flex:none}
 .topic-head{display:flex;align-items:flex-start;gap:16px;margin-bottom:20px}
