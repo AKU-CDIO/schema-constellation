@@ -190,7 +190,7 @@
 <script>
 const $ = (s,r=document)=>r.querySelector(s);
 const PHCOLOR = {core:"#2f6bff", ops:"#7c3aed", imaging:"#059669", specialty:"#d97706", future:"#db2777"};
-Promise.all([fetch("data/schema.js?v=4").then(r=>r.text()), fetch("data/phases.js?v=2").then(r=>r.text())]).then(([st, pt])=>{
+Promise.all([fetch("data/schema.js?v=5").then(r=>r.text()), fetch("data/phases.js?v=3").then(r=>r.text())]).then(([st, pt])=>{
   const m = st.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
   const pm = pt.match(/window\.SCHEMA_PHASES\s*=\s*(\{.*\});/s);
   if(!m || !pm) return;

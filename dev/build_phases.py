@@ -10,12 +10,12 @@ dropped with a warning so the emitted file always resolves.
 """
 import io, json, os, re, glob
 
-ROOT = r"C:\Users\derick.imbati\OneDrive - Aga Khan University\Documents\MasterPiece\MAYO\Cohort_Data_Sets\schema-constellation"
-SQL_DIR = ROOT + r"\dev\fcap1a_utf8"
-OUT = ROOT + r"\data\phases.js"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SQL_DIR = os.path.join(ROOT, "dev", "fcap1a_utf8")
+OUT = os.path.join(ROOT, "data", "phases.js")
 
 # ---- load schema.js tables ----
-s = io.open(ROOT + r"\data\schema.js", encoding="utf-8").read()
+s = io.open(os.path.join(ROOT, "data", "schema.js"), encoding="utf-8").read()
 data = json.loads(re.search(r"window\.SCHEMA_DATA\s*=\s*(\{.*\});", s, re.S).group(1))
 TABLES = set(data["tables"].keys())
 
@@ -164,7 +164,7 @@ PHASES = [
          ["MisSpec_Main", "MisSvc_Main", "DMisProvider", "DMisProviderGroup", "DMisProviderType"]),
         ("family", "Family Medical History",
          "Family members, family problem history and relationship/consanguinity, with the relationship dictionary.",
-         "Yes", "Output exists as tbl_FCAP1A_FamilyMedicalHistory in the cohort layer; the plan below is the build blueprint for it.", "FCAP1A_FamilyMedicalHistory",
+         "Yes", "Implemented by usp_Build_FCAP1A_FamilyMedicalHistory.sql; the output is tbl_FCAP1A_FamilyMedicalHistory.", "FCAP1A_FamilyMedicalHistory",
          ["EmrPat_FamilyMembers", "EmrPat_FamilyMembers_DeceasedComment", "EmrPat_FamilyProblemMembers", "EmrPat_FamilyProblems", "MisRelat_Main"]),
         ("micro", "Microbiology",
          "Microbiology isolates and culture findings with the procedure and result-text sources.",
@@ -216,7 +216,7 @@ PHASES = [
          "No", "Captured as part of Patient Provided Info; no dedicated table set.", None, []),
         ("surgery", "Surgical Cases",
          "Surgical case headers and schedules: case type, operating room and duration detail linked to the scheduled appointment (CwsAppt_Main) which carries the patient and visit keys.",
-         "Yes", "No FCAP1A build SP exists yet for surgery; the curated source set is the SurCase/CwsAppt pair bridged to the patient hub.", None,
+         "Yes", "Blueprint only: no FCAP1A SQL asset exists yet; the source contract is the SurCase/CwsAppt set bridged by SourceID + VisitID.", "FCAP1A_SurgicalCases",
          ["SurCase_Main", "SurCaseType_Main", "CwsAppt_Main"]),
     ]),
     ("Phase 3 · Imaging & Diagnostics", "imaging", [
@@ -362,6 +362,33 @@ CAT = {
 }
 
 # ---- build output ----
+SQL_ASSETS = data.get("procedures", [])
+ASSET_BY_ID = {asset["id"]: asset for asset in SQL_ASSETS}
+RELATED_ASSETS = {
+    "clinicalnotes": ["usp_Build_FCAP1A_ClinicalNarrative_Extended"],
+    "lab": ["Special Issu  FCAP1A_Labs_ResultComments_Extended_Merged"],
+    "pathology": ["usp_Build_FCAP1A_PathologyEHR_Extended"],
+    "ppi": ["usp_Build_FCAP1A_PatientReferrals_Extended"],
+}
+
+
+def sp_plan(topic_id, sp_name):
+    primary = "usp_Build_" + sp_name
+    assets = []
+    if primary in ASSET_BY_ID:
+        assets.append(primary)
+    for asset_id in RELATED_ASSETS.get(topic_id, []):
+        if asset_id in ASSET_BY_ID and asset_id not in assets:
+            assets.append(asset_id)
+    implemented = primary in ASSET_BY_ID
+    return {
+        "name": sp_name,
+        "out": pick_output(sp_name),
+        "status": "implemented" if implemented else "blueprint",
+        "implemented": implemented,
+        "assets": assets,
+    }
+
 phases_out = []
 total_topics = 0
 for pname, pid, topics in PHASES:
@@ -373,7 +400,7 @@ for pname, pid, topics in PHASES:
         kept = keep(tables)
         sp_out = None
         if sp:
-            sp_out = {"name": sp, "out": pick_output(sp)}
+            sp_out = sp_plan(tid, sp)
         t_out.append({
             "id": tid, "name": name, "desc": desc,
             "avail": avail, "note": note, "sp": sp_out, "tables": kept,
@@ -382,7 +409,7 @@ for pname, pid, topics in PHASES:
         total_topics += 1
     phases_out.append({"id": pid, "name": pname, "topics": t_out})
 
-out = {"phases": phases_out}
+out = {"phases": phases_out, "procedures": SQL_ASSETS}
 with io.open(OUT, "w", encoding="utf-8", newline="\n") as f:
     f.write("window.SCHEMA_PHASES = ")
     f.write(json.dumps(out, ensure_ascii=False, separators=(",", ":")))

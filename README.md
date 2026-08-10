@@ -65,3 +65,11 @@ The fcap1a stored-procedure sources used for SP semantics are in `dev/fcap1a_utf
 - Schema generated from the AKU Meditech schema dump + FCAP1A build stored procedures.
 - Analysis window: 2022-11-05 → 2026-06-14.
 - Join-key convention: blue = PatientID grain (`SourceID + PatientID`), amber = VisitID grain (`SourceID + VisitID`).
+
+## Relationship and procedure completion
+
+- `dev/finalize_schema.py` preserves the curated graph and adds auditable SQL lineage, schema-FK, table-family, and key-grain links. Every relationship records `kind`, `evidence`, `confidence`, and whether it belongs in the default graph.
+- The explorer keeps the 101 hand-curated source joins readable by default; **All documented links** reveals the derived relationship layer.
+- `data/phases.js` distinguishes checked-in **implemented** procedures from **blueprints** and carries the full SQL asset catalog.
+- The source named `info_schema.csv` contains XLSX workbook bytes (17,094 tables / 143,082 columns); do not parse it as comma-separated text.
+- Run `python dev/finalize_schema.py` before `python dev/build_phases.py` whenever SQL assets or the schema catalog change.

@@ -105,7 +105,7 @@ function valSql(topic, members, anchor){
 }
 
 Promise.all([
-  fetch("data/schema.js?v=4").then(r => r.text()),
+  fetch("data/schema.js?v=5").then(r => r.text()),
   fetch("data/phases.js?v=4").then(r => r.text()),
 ]).then(([t, p]) => {
   const m = t.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
@@ -216,7 +216,7 @@ Promise.all([
     });
   });
 }).catch(() => {
-  $("#sqlList").innerHTML = '<div class="topic-loading">Could not load data/schema.js?v=4.</div>';
+  $("#sqlList").innerHTML = '<div class="topic-loading">Could not load data/schema.js?v=5.</div>';
 });
 </script>
 </body>

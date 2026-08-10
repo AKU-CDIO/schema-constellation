@@ -70,90 +70,113 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">"
 const ZONE = {hub:"HUB",identity:"IDENTITY",encounter:"ENCOUNTER",clinical:"CLINICAL",clinical_detail:"DETAIL",dictionary:"DICT"};
 const ZONE_ORDER = ["hub","identity","encounter","clinical","clinical_detail","dictionary"];
 const PHCOLOR = {core:"#2f6bff", ops:"#7c3aed", imaging:"#059669", specialty:"#d97706", future:"#db2777"};
-const dbOf = n => n === "AdmVisits" ? "AKULivendb" : "AKULiveATdb";
-const hasVisitID = t => (t.cols || []).some(c => c.n === "VisitID");
-const hasPatientID = t => (t.cols || []).some(c => c.n === "PatientID");
-const spineOf = n => /^(RegAcct_|PcsAcct|OmOrd|Pth|ItsResult|EmrAcctRep)/.test(n) ? "RegAcct_Main" : "AdmVisits";
+let TABLES = {};
+const tableOf = n => TABLES[n] || {};
+const colNames = t => new Set((t.cols || []).map(c => c.n));
+const hasCol = (t, n) => colNames(t).has(n);
+const dbOf = n => tableOf(n).db || (n === "AdmVisits" ? "AKULivendb" : "AKULiveATdb");
+const fq = n => `[${dbOf(n)}].[dbo].[${n}]`;
+const hasVisitID = t => hasCol(t, "VisitID");
+const hasPatientID = t => hasCol(t, "PatientID");
+const spineOf = n => /^(RegAcct_|PcsAcct|OmOrd|Pth|ItsResult|EmrAcctRep|BarAcct|SurCase|CwsAppt)/.test(n) ? "RegAcct_Main" : "AdmVisits";
 const outFull = t => t.sp.out;
 const domOf = t => outFull(t).replace("tbl_FCAP1A_", "").replace("_Extended", "").replace("_Merged", "");
 const planName = t => "sp_FCAP1A_" + domOf(t);
 const procName = t => "usp_Build_" + t.sp.name;
+const planStatus = t => (t.sp && t.sp.status) || "blueprint";
+const keyCols = t => {
+  const names = colNames(t);
+  let keys = (t.pk || []).filter(k => names.has(k));
+  if (!keys.length && names.has("SourceID") && names.has("PatientID")) keys = ["SourceID", "PatientID"];
+  if (!keys.length && names.has("SourceID") && names.has("VisitID")) keys = ["SourceID", "VisitID"];
+  return keys;
+};
 const CAT_ORDER = ["identity", "encounter", "diagnosis", "medication", "allergy",
   "immunization", "lab", "family", "vitals", "careplan", "registry"];
 
 function valSql(topic, members, anchor){
   if (!topic.sp) return null;
-  const out = outFull(topic);
-  const dom = domOf(topic);
+  const out = outFull(topic), outTable = tableOf(out), dom = domOf(topic);
+  const implemented = planStatus(topic) === "implemented";
   const L = [];
   L.push(`-- ============================================================`);
-  L.push(`-- SP PLAN    : ${planName(topic)}  (proc ${procName(topic)})`);
+  L.push(`-- ${implemented ? "IMPLEMENTED SP" : "BLUEPRINT"} : ${planName(topic)}  (proc ${procName(topic)})`);
   L.push(`-- OUTPUT     : CDIO_MeditechDB.dbo.${out}`);
-  L.push(`-- SOURCES    : ${members.length} tables (${dbOf(members[0].name)} + AKULivendb)`);
+  L.push(`-- SOURCES    : ${members.length} documented tables`);
   L.push(`-- ============================================================`);
-  L.push(`--`);
-  L.push(`-- (1) SOURCE HEALTH - run BEFORE the build`);
-  members.forEach(t => L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients FROM ${dbOf(t.name)}.dbo.${t.name};`));
-  L.push(`--`);
-  L.push(`-- (2) KEY INTEGRITY - composite SourceID + PatientID must be complete`);
-  members.forEach(t => L.push(`SELECT COUNT(*) AS MissingKey FROM ${dbOf(t.name)}.dbo.${t.name} WHERE SourceID IS NULL OR PatientID IS NULL;`));
+  if (!implemented) L.push(`-- NOTE: proposed contract; deploy the procedure before running output checks.`);
+  L.push(`--`, `-- (1) SOURCE HEALTH - field-aware counts`);
+  members.forEach(t => {
+    const metrics = ["COUNT(*) AS Rows"];
+    if (hasPatientID(t)) metrics.push("COUNT(DISTINCT PatientID) AS Patients");
+    if (hasVisitID(t)) metrics.push("COUNT(DISTINCT VisitID) AS Visits");
+    L.push(`SELECT ${metrics.join(", ")} FROM ${fq(t.name)};`);
+  });
+  L.push(`--`, `-- (2) KEY INTEGRITY - checks only keys present on each table`);
+  members.forEach(t => {
+    const keys = keyCols(t);
+    if (keys.length) L.push(`SELECT COUNT(*) AS MissingKey FROM ${fq(t.name)} WHERE ${keys.map(k => `[${k}] IS NULL`).join(" OR ")};`);
+    else L.push(`-- ${t.name}: no explicit key columns in the curated contract; review manually.`);
+  });
   const vis = members.filter(hasVisitID);
   if (vis.length){
-    L.push(`--`);
-    L.push(`-- (2b) VISIT GRAIN - every VisitID must resolve to the encounter spine (${spineOf(vis[0].name)}.VisitID)`);
+    L.push(`--`, `-- (2b) VISIT GRAIN - every non-null VisitID resolves to its encounter spine`);
     vis.forEach(t => {
       const spine = spineOf(t.name);
-      L.push(`SELECT COUNT(*) AS MissingVisit FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(spine)}.dbo.${spine} v ON t.SourceID=v.SourceID AND t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`);
+      L.push(`SELECT COUNT(*) AS MissingVisit FROM ${fq(t.name)} t LEFT JOIN ${fq(spine)} v ON t.SourceID=v.SourceID AND t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`);
     });
   }
-  L.push(`--`);
-  L.push(`-- (3) HUB LINKAGE - no orphan rows vs ${anchor}`);
-  members.filter(t => t.name !== anchor).forEach(t => L.push(
-    `SELECT COUNT(*) AS Orphans FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(anchor)}.dbo.${anchor} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE h.PatientID IS NULL;`));
-  L.push(`--`);
-  L.push(`-- (4) OUTPUT CONTRACT - run AFTER the build`);
-  L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients, COUNT(DISTINCT VisitID) AS Visits FROM CDIO_MeditechDB.dbo.${out};`);
-  L.push(`--`);
-  L.push(`-- (5) CROSS-SP - this output must be a subset of the Demographics universe`);
-  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
+  const patientMembers = members.filter(t => t.name !== anchor && hasPatientID(t));
+  L.push(`--`, `-- (3) HUB LINKAGE - patient-grained tables only`);
+  if (patientMembers.length) patientMembers.forEach(t => L.push(`SELECT COUNT(*) AS Orphans FROM ${fq(t.name)} t LEFT JOIN ${fq(anchor)} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE t.PatientID IS NOT NULL AND h.PatientID IS NULL;`));
+  else L.push(`-- No patient-grained source tables require a hub-orphan check.`);
+  L.push(`--`, `-- (4) OUTPUT CONTRACT - run after an implemented build`);
+  if ((outTable.cols || []).length){
+    const metrics = ["COUNT(*) AS Rows"];
+    if (hasPatientID(outTable)) metrics.push("COUNT(DISTINCT PatientID) AS Patients");
+    if (hasVisitID(outTable)) metrics.push("COUNT(DISTINCT VisitID) AS Visits");
+    L.push(`SELECT ${metrics.join(", ")} FROM [CDIO_MeditechDB].[dbo].[${out}];`);
+  } else L.push(`-- Proposed output ${out} is not yet present in the schema catalog.`);
+  L.push(`--`, `-- (5) CROSS-SP - patient outputs must be a subset of Demographics`);
+  if (hasPatientID(outTable)) L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM [CDIO_MeditechDB].[dbo].[${out}] d LEFT JOIN [CDIO_MeditechDB].[dbo].[tbl_FCAP1A_Demographics_Extended] g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE d.PatientID IS NOT NULL AND g.PatientID IS NULL;`);
+  else L.push(`-- Not applicable until the output contract includes PatientID.`);
   return L.join("\n");
 }
 
 function traceForPatient(p, pid){
   const topic = p.topic;
   if (!topic.sp) return null;
-  const out = outFull(topic);
+  const out = outFull(topic), outTable = tableOf(out);
   const q = String(pid).replace(/'/g, "''");
+  const traceable = p.members.filter(t => hasPatientID(t) || hasVisitID(t));
   const L = [];
   L.push(`-- ============================================================`);
   L.push(`-- TRACE ONE PATIENT : ${pid}`);
-  L.push(`-- SP PLAN  : ${planName(topic)}  (proc ${procName(topic)})`);
+  L.push(`-- ${planStatus(topic).toUpperCase()} : ${planName(topic)}  (proc ${procName(topic)})`);
   L.push(`-- OUTPUT   : CDIO_MeditechDB.dbo.${out}`);
-  L.push(`-- RULE     : for this patient the SP output must reconcile with`);
-  L.push(`--           the source tables and their joins (step 3 == step 1).`);
-  L.push(`-- ============================================================`);
-  L.push(`--`);
-  L.push(`-- (1) OUTPUT ROWS - what the SP produced for the patient`);
-  L.push(`SELECT COUNT(*) AS OutRows FROM CDIO_MeditechDB.dbo.${out} WHERE PatientID = '${q}';`);
-  L.push(`--`);
-  L.push(`-- (2) SOURCE ROWS - rows each source table holds for the patient`);
-  L.push(p.members.map(t => {
-    if (hasPatientID(t)) return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS SrcRows FROM ${dbOf(t.name)}.dbo.${t.name} WHERE PatientID = '${q}'`;
+  L.push(`-- ============================================================`, `--`);
+  L.push(`-- (1) OUTPUT ROWS`);
+  if (hasPatientID(outTable)) L.push(`SELECT COUNT(*) AS OutRows FROM [CDIO_MeditechDB].[dbo].[${out}] WHERE PatientID = '${q}';`);
+  else L.push(`-- Output is not deployed or does not expose PatientID; source trace only.`);
+  L.push(`--`, `-- (2) SOURCE ROWS - lookup-only tables are intentionally excluded`);
+  if (traceable.length) L.push(traceable.map(t => {
+    if (hasPatientID(t)) return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS SrcRows FROM ${fq(t.name)} WHERE PatientID = '${q}'`;
     const s = spineOf(t.name);
-    return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS SrcRows FROM ${dbOf(t.name)}.dbo.${t.name} x INNER JOIN ${dbOf(s)}.dbo.${s} sp ON sp.SourceID=x.SourceID AND sp.VisitID=x.VisitID WHERE sp.PatientID = '${q}'`;
+    return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS SrcRows FROM ${fq(t.name)} x INNER JOIN ${fq(s)} sp ON sp.SourceID=x.SourceID AND sp.VisitID=x.VisitID WHERE sp.PatientID = '${q}'`;
   }).join("\nUNION ALL\n") + ";");
-  L.push(`--`);
-  L.push(`-- (3) JOIN TRACE - rows the build joins yield for the patient`);
-  L.push(p.members.map(t => {
-    const db = dbOf(t.name);
-    if (hasPatientID(t)) return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS JoinRows FROM ${db}.dbo.${t.name} x INNER JOIN ${dbOf(p.anchor)}.dbo.${p.anchor} h ON h.SourceID=x.SourceID AND h.PatientID=x.PatientID WHERE x.PatientID = '${q}'`;
+  else L.push(`-- No patient- or visit-grained sources are available for this topic.`);
+  L.push(`--`, `-- (3) JOIN TRACE`);
+  if (traceable.length) L.push(traceable.map(t => {
+    if (hasPatientID(t)) return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS JoinRows FROM ${fq(t.name)} x INNER JOIN ${fq(p.anchor)} h ON h.SourceID=x.SourceID AND h.PatientID=x.PatientID WHERE x.PatientID = '${q}'`;
     const s = spineOf(t.name);
-    return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS JoinRows FROM ${db}.dbo.${t.name} x INNER JOIN ${dbOf(s)}.dbo.${s} sp ON sp.SourceID=x.SourceID AND sp.VisitID=x.VisitID INNER JOIN ${dbOf(p.anchor)}.dbo.${p.anchor} h ON h.SourceID=sp.SourceID AND h.PatientID=sp.PatientID WHERE sp.PatientID = '${q}'`;
+    return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS JoinRows FROM ${fq(t.name)} x INNER JOIN ${fq(s)} sp ON sp.SourceID=x.SourceID AND sp.VisitID=x.VisitID INNER JOIN ${fq(p.anchor)} h ON h.SourceID=sp.SourceID AND h.PatientID=sp.PatientID WHERE sp.PatientID = '${q}'`;
   }).join("\nUNION ALL\n") + ";");
-  L.push(`--`);
-  const grain = p.members.find(m => m.zone === "clinical") || p.members[0];
-  L.push(`-- EXPECT: ${grain.name} JoinRows (3) == OutRows (1). Any gap means the`);
-  L.push(`--         SP output and the source tables have drifted for this patient.`);
+  else L.push(`-- No traceable source joins.`);
+  const grain = traceable.find(t => t.zone === "clinical") || traceable[0];
+  if (grain && hasPatientID(outTable)){
+    L.push(`--`, `-- EXPECT: ${grain.name} JoinRows should reconcile with OutRows.`);
+    L.push(`-- Any gap means the procedure output and source contract have drifted.`);
+  }
   return L.join("\n");
 }
 
@@ -177,7 +200,7 @@ function topicBlock(ph, t, tables, rels){
       <div class="na-note">${esc(t.note || "External to the relational Meditech schema.")}</div>
     </div>`;
   }
-  const internal = rels.filter(r => r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
+  const internal = rels.filter(r => r.kind === "join" && r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
   const anchor = (members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
   const visMembers = members.filter(hasVisitID);
   const keys = [...new Set([...internal.map(r => r.on), ...(visMembers.length ? ["SourceID + VisitID"] : [])])];
@@ -234,7 +257,7 @@ function topicBlock(ph, t, tables, rels){
     </div>
     ${sql ? `
     <details class="sql-card">
-      <summary>Validation SQL · ${esc(planName(t))}</summary>
+      <summary>${planStatus(t) === "implemented" ? "Validation SQL" : "Blueprint validation SQL"} · ${esc(planName(t))}</summary>
       <pre class="sql-code"><code>${esc(sql)}</code></pre>
       <button class="btn ghost sm copy-btn" data-sql="${esc(sql)}">Copy SQL</button>
     </details>
@@ -252,8 +275,8 @@ function topicBlock(ph, t, tables, rels){
 }
 
 Promise.all([
-  fetch("data/schema.js?v=3").then(r => r.text()),
-  fetch("data/phases.js?v=1").then(r => r.text()),
+  fetch("data/schema.js?v=5").then(r => r.text()),
+  fetch("data/phases.js?v=3").then(r => r.text()),
 ]).then(([s, p]) => {
   const m = s.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
   const pm = p.match(/window\.SCHEMA_PHASES\s*=\s*(\{.*\});/s);
@@ -261,6 +284,7 @@ Promise.all([
   const d = JSON.parse(m[1]);
   const pd = JSON.parse(pm[1]);
   const tables = d.tables, rels = d.rels;
+  TABLES = tables;
   const root = $("#phases");
   if (!tables || !pd.phases) return;
 

@@ -342,6 +342,7 @@
     <aside>
       <div class="side-scroll">
         <label class="vf" id="vfWrap" title="Show only source tables that carry a VisitID"><input type="checkbox" id="visitOnly"><span>Visit-grained tables only</span><b id="vfCount">67</b></label>
+        <label class="vf" id="allLinksWrap" title="Show schema-derived and key-grain links in addition to the curated overview"><input type="checkbox" id="allLinks"><span>All documented links</span><b id="allLinksCount">—</b></label>
         <div class="side-label">Data Topics</div>
         <div id="doctopics"></div>
       </div>
@@ -361,8 +362,8 @@
   </div>
 </div>
 
-<script src="data/schema.js?v=4"></script>
-<script src="data/phases.js?v=2"></script>
+<script src="data/schema.js?v=5"></script>
+<script src="data/phases.js?v=3"></script>
 <script>
 "use strict";
 const DATA = window.SCHEMA_DATA || {};
@@ -411,8 +412,18 @@ const docAvailTxt = a => a === "Yes" ? "Yes" : a === "No" ? "No" : "—";
 
 /* ===================== SP generation plan (shared with the SP Workspace page) ===================== */
 const SP_ZONE_ORDER = ["hub","identity","encounter","clinical","clinical_detail","dictionary"];
-const dbOf = n => n === "AdmVisits" ? "AKULivendb" : "AKULiveATdb";
-const hasVisitID = t => (t.cols || []).some(c => c.n === "VisitID");
+const dbOf = n => (DATA.tables[n] || {}).db || (n === "AdmVisits" ? "AKULivendb" : "AKULiveATdb");
+const hasCol = (t, n) => (t.cols || []).some(c => c.n === n);
+const hasVisitID = t => hasCol(t, "VisitID");
+const hasPatientID = t => hasCol(t, "PatientID");
+const fq = n => `[${dbOf(n)}].[dbo].[${n}]`;
+const sourceKeys = t => {
+  const names = new Set((t.cols || []).map(c => c.n));
+  let keys = (t.pk || []).filter(k => names.has(k));
+  if (!keys.length && names.has("SourceID") && names.has("PatientID")) keys = ["SourceID", "PatientID"];
+  if (!keys.length && names.has("SourceID") && names.has("VisitID")) keys = ["SourceID", "VisitID"];
+  return keys;
+};
 const keyFamily = on => { const s = String(on || ""); return s.includes("VisitID") ? "kv" : s.includes("PatientID") ? "kp" : "ko"; };
 const spineOf = n => /^(RegAcct_|PcsAcct|OmOrd|Pth|ItsResult|EmrAcctRep)/.test(n) ? "RegAcct_Main" : "AdmVisits";
 const domOfOut = out => out.replace("tbl_FCAP1A_", "").replace("_Extended", "").replace("_Merged", "");
@@ -424,40 +435,53 @@ function spPlanOfPh(item){
   const members = item.tables.map(n => DATA.tables[n]).filter(Boolean)
     .sort((a, b) => (SP_ZONE_ORDER.indexOf(a.zone) - SP_ZONE_ORDER.indexOf(b.zone)) || a.name.localeCompare(b.name));
   if (!members.length) return null;
-  const internal = DATA.rels.filter(r => r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
+  const internal = DATA.rels.filter(r => r.kind === "join" && r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
   const anchor = (members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
   return { item, members, internal, anchor, out: item.sp.out, plan: phPlanName(item), proc: phProcName(item) };
 }
 
 function spValSql(p){
-  const out = p.out, dom = domOfOut(out);
+  const out = p.out, outTable = DATA.tables[out] || {}, dom = domOfOut(out);
+  const implemented = p.item.sp && p.item.sp.status === "implemented";
   const L = [];
   L.push(`-- ============================================================`);
-  L.push(`-- SP PLAN    : ${p.plan}  (proc ${p.proc})`);
+  L.push(`-- ${implemented ? "IMPLEMENTED SP" : "BLUEPRINT"} : ${p.plan}  (proc ${p.proc})`);
   L.push(`-- OUTPUT     : CDIO_MeditechDB.dbo.${out}`);
-  L.push(`-- SOURCES    : ${p.members.length} tables (${dbOf(p.members[0].name)} + AKULivendb)`);
+  L.push(`-- SOURCES    : ${p.members.length} documented tables`);
   L.push(`-- ============================================================`);
-  L.push(`--`);
-  L.push(`-- (1) SOURCE HEALTH - run BEFORE the build`);
-  p.members.forEach(t => L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients FROM ${dbOf(t.name)}.dbo.${t.name};`));
-  L.push(`--`);
-  L.push(`-- (2) KEY INTEGRITY - composite SourceID + PatientID must be complete`);
-  p.members.forEach(t => L.push(`SELECT COUNT(*) AS MissingKey FROM ${dbOf(t.name)}.dbo.${t.name} WHERE SourceID IS NULL OR PatientID IS NULL;`));
+  if (!implemented) L.push(`-- NOTE: proposed contract; deploy the procedure before running output checks.`);
+  L.push(`--`, `-- (1) SOURCE HEALTH - field-aware counts`);
+  p.members.forEach(t => {
+    const metrics = ["COUNT(*) AS Rows"];
+    if (hasPatientID(t)) metrics.push("COUNT(DISTINCT PatientID) AS Patients");
+    if (hasVisitID(t)) metrics.push("COUNT(DISTINCT VisitID) AS Visits");
+    L.push(`SELECT ${metrics.join(", ")} FROM ${fq(t.name)};`);
+  });
+  L.push(`--`, `-- (2) KEY INTEGRITY - checks only keys present on each table`);
+  p.members.forEach(t => {
+    const keys = sourceKeys(t);
+    if (keys.length) L.push(`SELECT COUNT(*) AS MissingKey FROM ${fq(t.name)} WHERE ${keys.map(k => `[${k}] IS NULL`).join(" OR ")};`);
+    else L.push(`-- ${t.name}: no explicit key columns in the curated contract; review manually.`);
+  });
   const vis = p.members.filter(hasVisitID);
   if (vis.length){
-    L.push(`--`);
-    L.push(`-- (2b) VISIT GRAIN - every VisitID must resolve to the encounter spine (${spineOf(vis[0].name)}.VisitID)`);
-    vis.forEach(t => { const s = spineOf(t.name); L.push(`SELECT COUNT(*) AS MissingVisit FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(s)}.dbo.${s} v ON t.SourceID=v.SourceID AND t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`); });
+    L.push(`--`, `-- (2b) VISIT GRAIN - every non-null VisitID resolves to its encounter spine`);
+    vis.forEach(t => { const s = spineOf(t.name); L.push(`SELECT COUNT(*) AS MissingVisit FROM ${fq(t.name)} t LEFT JOIN ${fq(s)} v ON t.SourceID=v.SourceID AND t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`); });
   }
-  L.push(`--`);
-  L.push(`-- (3) HUB LINKAGE - no orphan rows vs ${p.anchor}`);
-  p.members.filter(t => t.name !== p.anchor).forEach(t => L.push(`SELECT COUNT(*) AS Orphans FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(p.anchor)}.dbo.${p.anchor} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE h.PatientID IS NULL;`));
-  L.push(`--`);
-  L.push(`-- (4) OUTPUT CONTRACT - run AFTER the build`);
-  L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients, COUNT(DISTINCT VisitID) AS Visits FROM CDIO_MeditechDB.dbo.${out};`);
-  L.push(`--`);
-  L.push(`-- (5) CROSS-SP - this output must be a subset of the Demographics universe`);
-  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
+  const patientMembers = p.members.filter(t => t.name !== p.anchor && hasPatientID(t));
+  L.push(`--`, `-- (3) HUB LINKAGE - patient-grained tables only`);
+  if (patientMembers.length) patientMembers.forEach(t => L.push(`SELECT COUNT(*) AS Orphans FROM ${fq(t.name)} t LEFT JOIN ${fq(p.anchor)} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE t.PatientID IS NOT NULL AND h.PatientID IS NULL;`));
+  else L.push(`-- No patient-grained source tables require a hub-orphan check.`);
+  L.push(`--`, `-- (4) OUTPUT CONTRACT - run after an implemented build`);
+  if ((outTable.cols || []).length){
+    const metrics = ["COUNT(*) AS Rows"];
+    if (hasPatientID(outTable)) metrics.push("COUNT(DISTINCT PatientID) AS Patients");
+    if (hasVisitID(outTable)) metrics.push("COUNT(DISTINCT VisitID) AS Visits");
+    L.push(`SELECT ${metrics.join(", ")} FROM [CDIO_MeditechDB].[dbo].[${out}];`);
+  } else L.push(`-- Proposed output ${out} is not yet present in the schema catalog.`);
+  L.push(`--`, `-- (5) CROSS-SP - patient outputs must be a subset of Demographics`);
+  if (hasPatientID(outTable)) L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM [CDIO_MeditechDB].[dbo].[${out}] d LEFT JOIN [CDIO_MeditechDB].[dbo].[tbl_FCAP1A_Demographics_Extended] g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE d.PatientID IS NOT NULL AND g.PatientID IS NULL;`);
+  else L.push(`-- Not applicable until the output contract includes PatientID.`);
   return L.join("\n");
 }
 
@@ -478,6 +502,7 @@ function spSectionHTML(p){
       <h3 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span>SP Generation Plan</span>
         <span class="chip" style="background:${color}1a;border-color:${color}55;color:${color}">${esc(p.plan)}</span>
+        <span class="chip ${p.item.sp.status === "implemented" ? "pk" : "ext"}">${esc((p.item.sp.status || "blueprint").toUpperCase())}</span>
       </h3>
       <div class="dl" style="margin-top:6px">Output: <b>CDIO_MeditechDB.dbo.${esc(p.out)}</b> · ${p.members.length} source tables</div>
       <div class="sqlbox" style="margin-top:10px"><div style="display:flex;flex-wrap:wrap;gap:5px">${tables}</div></div>
@@ -591,10 +616,12 @@ DATA.rels.forEach(r => {
   (relByFrom[r.from] = relByFrom[r.from] || []).push(r);
   (relByTo[r.to] = relByTo[r.to] || []).push(r);
 });
-function neighbors(id){
+function showAllLinks(){ const el = document.getElementById("allLinks"); return !!(el && el.checked); }
+function relationshipVisible(r){ return r.kind === "join" && (r.graph !== false || showAllLinks()); }
+function neighbors(id, includeHidden=showAllLinks()){
   const set = new Set();
-  (relByFrom[id] || []).forEach(r => set.add(r.to));
-  (relByTo[id] || []).forEach(r => set.add(r.from));
+  (relByFrom[id] || []).forEach(r => { if (r.kind === "join" && (includeHidden || r.graph !== false)) set.add(r.to); });
+  (relByTo[id] || []).forEach(r => { if (r.kind === "join" && (includeHidden || r.graph !== false)) set.add(r.from); });
   return set;
 }
 
@@ -841,6 +868,7 @@ function render(){
   DATA.rels.forEach(r => {
     const a = r.from, b = r.to;
     if (!isSource(a) || !isSource(b)) return;
+    if (!relationshipVisible(r)) return;
     if (!ids.has(a) || !ids.has(b)) return;
     if (drawn.has(a + "|" + b) || drawn.has(b + "|" + a)) return;
     drawn.add(a + "|" + b);
@@ -1184,7 +1212,7 @@ function joinPath(from, to){
   const prev = {}; const seen = new Set([from]); const q = [from];
   while (q.length){
     const cur = q.shift();
-    const ns = neighbors(cur);
+    const ns = neighbors(cur, false);
     for (const n of ns){
       if (seen.has(n)) continue;
       seen.add(n); prev[n] = cur; q.push(n);
@@ -1199,7 +1227,7 @@ function joinPath(from, to){
 }
 
 function relBetween(a, b){
-  return DATA.rels.find(r => (r.from === a && r.to === b) || (r.from === b && r.to === a));
+  return DATA.rels.find(r => r.kind === "join" && ((r.from === a && r.to === b) || (r.from === b && r.to === a)));
 }
 
 function joinNarrative(r, name){
@@ -1273,12 +1301,13 @@ function renderDetail(name, viaTopic){
           <div class="rt">${esc(other)} <span style="font-family:var(--sans);font-weight:500;color:var(--muted)">(${esc(DATA.tables[other].label)})</span></div>
           <div class="ron">on ${esc(r.on)}</div>
           ${r.note ? `<div class="rnote">${esc(r.note)}</div>` : ""}
+          <div class="badges" style="margin-top:5px"><span class="chip ext">${esc(r.kind || "join")}</span><span class="chip ext">${esc(r.evidence || "curated")}</span><span class="chip ext">${esc(r.confidence || "high")}</span></div>
           <div class="rnarr">${joinNarrative(r, name)}</div>
         </div>
         <span class="card">${esc(r.card)}</span>
       </div>`;
   });
-  if (!relRows) relRows = `<div class="notable">No curated relations for this table.</div>`;
+  if (!relRows) relRows = `<div class="notable">No documented relationships for this table.</div>`;
 
   /* join path from hub */
   const path = joinPath("HimRec_Main", name);
@@ -1320,7 +1349,7 @@ function renderDetail(name, viaTopic){
     <div class="detail-body">
       <div class="sec"><h3>Key columns · ${esc(st.label)}</h3><div class="keychips">${keyChips || `<span class="notable">No explicit keys.</span>`}</div></div>
       <div class="sec"><h3>Columns (${(t.cols || []).length})</h3><div class="cols">${colRows}</div></div>
-      <div class="sec"><h3>Join keys · which tables it links to</h3><div class="rels">${relRows}</div></div>
+      <div class="sec"><h3>Relationships & lineage · evidence and confidence</h3><div class="rels">${relRows}</div></div>
       <div class="sec"><h3>Join path from Patient Hub</h3><div class="joinpath">${jp}</div></div>
       <div class="sec"><h3>Sample SQL</h3>
         <div class="sqlbox"><pre>${sql.replace(/</g, "&lt;")}</pre></div>
@@ -1714,6 +1743,17 @@ function init(){
     const n = src.filter(t => hasVisitID(DATA.tables[t])).length;
     const c = $("#vfCount"); if (c) c.textContent = n;
     const w = $("#vfWrap"); if (w) w.title = "Show only source tables that carry a VisitID (" + n + " of " + src.length + ")";
+  }
+
+
+  const allLinks = $("#allLinks");
+  if (allLinks){
+    const hidden = DATA.rels.filter(r => r.kind === "join" && r.graph === false && isSource(r.from) && isSource(r.to)).length;
+    $("#allLinksCount").textContent = hidden;
+    allLinks.addEventListener("change", () => {
+      if (state.mode === "table" && state.focusTable) buildTablePositions(state.focusTable);
+      state.count = visibleIds().size; fitToExtent(); render();
+    });
   }
 
   $("#search").addEventListener("input", e => doSearch(e.target.value));
