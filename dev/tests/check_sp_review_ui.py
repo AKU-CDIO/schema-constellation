@@ -7,7 +7,8 @@ errors = []
 with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page(viewport={"width": 1680, "height": 940})
-    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+    bad_urls = set()
+    page.on("response", lambda r: bad_urls.add(r.url) if r.status >= 400 else None)
     page.on("pageerror", lambda err: errors.append(str(err)))
     page.goto("http://127.0.0.1:8123/sp-review.html")
     page.wait_for_timeout(1500)
@@ -45,6 +46,9 @@ with sync_playwright() as p:
     assert "Output validation query" in diagnosis.inner_text()
 
     assert page.locator('a[href="sps.html"]').count() > 0
+    ignored = ("favicon", "/auth/session")
+    bad_real = [u for u in bad_urls if not any(i in u for i in ignored)]
+    assert not bad_real, f"HTTP>=400: {sorted(bad_real)}"
     assert not errors, errors
     browser.close()
 

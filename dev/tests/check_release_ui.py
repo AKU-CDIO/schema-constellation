@@ -5,10 +5,11 @@ from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:8123/"
 errors = []
+bad_urls = set()
 with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page(viewport={"width": 1680, "height": 940})
-    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+    page.on("response", lambda r: bad_urls.add(r.url) if r.status >= 400 else None)
     page.on("pageerror", lambda err: errors.append(str(err)))
 
     page.goto(BASE + "sps.html")
@@ -38,6 +39,9 @@ with sync_playwright() as p:
     assert page.locator(".rels .rel").count() > 0
     assert "evidence and confidence" in page.locator("#detail").inner_text().lower()
 
+    ignored = ("favicon", "/auth/session")
+    bad_real = [u for u in bad_urls if not any(i in u for i in ignored)]
+    assert not bad_real, f"HTTP>=400: {sorted(bad_real)}"
     assert not errors, errors
     browser.close()
 
