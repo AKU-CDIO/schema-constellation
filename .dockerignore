@@ -1,0 +1,9 @@
+.git
+.gitignore
+.openai
+dev
+work
+*.md
+node_modules
+npm-debug.log
+

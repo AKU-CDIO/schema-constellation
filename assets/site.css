@@ -261,3 +261,19 @@ footer .right{margin-left:auto;display:flex;gap:16px}
 .trace-row input{flex:1;min-width:180px;font:500 12px var(--mono);padding:.5rem .6rem;border-radius:8px;border:1px solid var(--line2);background:#fff;color:var(--txt)}
 .trace-row input:focus{outline:none;border-color:var(--accent)}
 .trace-code:empty::after{content:"Enter one PatientID, then Generate trace SQL.";color:var(--faint);font:500 13px var(--sans)}
+
+
+/* Authenticated Google Cloud account */
+.auth-account{position:relative;margin-left:auto;z-index:30}
+.auth-account summary{display:flex;align-items:center;gap:9px;list-style:none;cursor:pointer;padding:6px 9px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.78);transition:border-color .18s ease,box-shadow .18s ease}
+.auth-account summary::-webkit-details-marker{display:none}
+.auth-account summary:hover,.auth-account[open] summary{border-color:rgba(47,107,255,.35);box-shadow:0 8px 22px rgba(15,32,65,.1)}
+.auth-avatar{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--vio));color:#fff;font-weight:800;font-size:13px}
+.auth-copy{display:grid;min-width:0;line-height:1.15}
+.auth-copy small{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint)}
+.auth-copy b{max-width:190px;overflow:hidden;text-overflow:ellipsis;font-size:11px;white-space:nowrap;color:var(--txt)}
+.auth-menu{position:absolute;right:0;top:calc(100% + 8px);display:grid;gap:9px;min-width:220px;padding:13px;border:1px solid var(--line);border-radius:13px;background:#fff;box-shadow:0 18px 44px rgba(15,32,65,.18)}
+.auth-menu span{font-size:11px;color:var(--faint)}
+.auth-menu a{display:block;padding:9px 10px;border-radius:9px;background:var(--panel2);color:var(--accent);font-size:12px;font-weight:800;text-decoration:none}
+.auth-menu a:hover{background:rgba(47,107,255,.1)}
+@media (max-width:1000px){.auth-copy{display:none}.auth-account{margin-left:0}}

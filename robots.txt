@@ -1,3 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://storage.googleapis.com/cdio-migration-schema-constellation/sitemap.xml
+Sitemap: https://schema-constellation-864230826730.us-central1.run.app/sitemap.xml
