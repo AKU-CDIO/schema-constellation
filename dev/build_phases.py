@@ -151,7 +151,7 @@ PHASES = [
         ("problemlist", "Problem List",
          "The longitudinal problem list (active, pending, office, health concerns) reconciled to the problem dictionary.",
          "Yes", "Covered by the Diagnosis build (sp_FCAP1A_Diagnoses) — the full problem-list table set is planned under that SP.", "FCAP1A_Diagnoses_Extended",
-         ["EmrPat_Problems", "EmrPat_ProblemsMain", "EmrPat_PendingProblems", "EmrPat_OfficeProblems", "EmrPat_HealthConcerns", "MisPatProblem_Main"]),
+         ["EmrPat_Problems", "EmrPat_ProblemsMain", "MisPatProblem_Main"]),
     ]),
     ("Phase 2 · Operational & Ancillary", "ops", [
         ("appointments", "Appointments",
@@ -361,6 +361,42 @@ CAT = {
     "surgvideo": "lab",
 }
 
+# Dedicated contracts added after full INFORMATION_SCHEMA audit.
+REMAINING_OVERRIDES = {
+    "problemlist": {"sp": "FCAP1A_ProblemList", "tables": ["EmrPat_Problems", "EmrPat_ProblemsMain", "MisPatProblem_Main"], "note": "Dedicated active, pending, office, and health-concern problem output."},
+    "appointments": {"sp": "FCAP1A_Appointments", "tables": ["CwsAppt_Main", "CwsAppt_AuditTrail", "CwsAppt_Resources"], "note": "Appointment header, status, arrival, comments, resources, participants, and audit history."},
+    "medorders": {"sp": "FCAP1A_MedicationOrders", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Dedicated medication-order output separated from administrations."},
+    "procorders": {"sp": "FCAP1A_ProcedureOrders", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Dedicated non-medication procedure-order output."},
+    "ecgecho": {"sp": "FCAP1A_ECGAndEcho", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "EmrAcctRep_Images", "RegAcct_Main"], "note": "Relational order/report evidence; waveform and structured measurements require cardiology-system confirmation."},
+    "infusions": {"sp": "FCAP1A_Infusions", "tables": ["PcsMarAct_MarLastDocumented", "PcsMarAct_MarLastTitration", "PcsMarAct_MarActivityTitr", "PcsMarAct_BagInfusionLastDoc", "PcsMarAct_MarMeds", "PcsMarAct_MarRxs", "RegAcct_Main"], "note": "Direct MAR infusion, titration, medication, rate, volume, dose, and bag evidence."},
+    "pft": {"sp": "FCAP1A_PulmonaryFunctionTests", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "EmrAcctRep_Images", "RegAcct_Main"], "note": "PFT order/report evidence; structured spirometry measures are not present in the audited relational catalog."},
+    "rhc": {"sp": "FCAP1A_RHCMeasurements", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "EmrAcctRep_Images", "RegAcct_Main"], "note": "Catheterisation order/report evidence; structured haemodynamic measures require source-system onboarding."},
+    "social": {"sp": "FCAP1A_SocialHistory", "tables": ["HimRec_CustomDataQueries_Queries", "HimRec_CustomDataQueries_QueriesMult", "RegAcct_CustomDataQueries_Queries", "RegAcct_CustomDataQueries_QueriesMult", "MisQry_Main", "RegAcct_Main"], "note": "Configured social, tobacco, smoking, and alcohol query responses at patient and visit scope."},
+    "surgery": {"sp": "FCAP1A_Surgical_Cases_Extended", "tables": ["SurCase_Main", "SurCase_ActualProcs", "SurCase_ActualProcSurgTimes", "SurCase_Implant", "CwsAppt_Main"], "note": "Surgical case, scheduled appointment, primary actual procedure, operative timing, and implant summary."},
+    "dicom": {"sp": "FCAP1A_DICOMHeaders", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Relational image references only; authoritative DICOM study/series/instance headers remain external."},
+    "ct": {"sp": "FCAP1A_CTImaging", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "CT orders and report references; pixels remain external."},
+    "pet": {"sp": "FCAP1A_PETImaging", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "PET orders and report references; pixels remain external."},
+    "mri": {"sp": "FCAP1A_MRIImaging", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "MRI orders and report references; pixels remain external."},
+    "echo": {"sp": "FCAP1A_Echocardiograms", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Echo order/report evidence; structured measurements require cardiology-system confirmation."},
+    "gi": {"sp": "FCAP1A_GIEndoscopy", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Endoscopy order/report evidence; structured findings require procedure-system validation."},
+    "us": {"sp": "FCAP1A_UltrasoundImaging", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Ultrasound orders and report references; images remain external."},
+    "cath": {"sp": "FCAP1A_CardiologyCathImaging", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Cath orders and report references; angiographic media remain external."},
+    "mammo": {"sp": "FCAP1A_Mammography", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Mammography orders and report references; images remain external."},
+    "dpath": {"sp": "FCAP1A_DigitalPathology", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Relational digital-pathology references; whole-slide assets remain external."},
+    "ob": {"sp": "FCAP1A_OBDelivery", "tables": ["AmbPatCm_PregnancyData", "AmbPatCm_PregnancyMain", "AmbPatCm_PregnancyVisitLog"], "note": "Structured pregnancy episodes and visit linkage; actual delivery timestamp remains an explicit source gap."},
+    "derm": {"sp": "FCAP1A_DermatologyImaging", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Dermatology image/report references; clinical photographs remain external."},
+    "eye": {"sp": "FCAP1A_EyeImaging", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Fundus/OCT order and report references; image assets remain external."},
+    "vaccines": {"sp": "FCAP1A_Vaccines", "tables": ["EmrPat_Vaccines", "EmrPat_VaccinesDoses", "MisVaccine_Main"], "note": "Dedicated vaccine event output with dose, route, lot, manufacturer, and not-given reason."},
+    "otherreports": {"sp": "FCAP1A_OtherReports", "tables": ["EmrAcctRep_Images", "RegAcct_Main"], "note": "Consolidated patient-summary documents and account report references."},
+    "registries": {"sp": "FCAP1A_Registries", "tables": ["EmrPatRegistry_Main", "EmrPatRegistry_ChronicConds", "EmrPatRegistry_LastLabResults"], "note": "Registry membership and longitudinal registry observations."},
+    "xray": {"sp": "FCAP1A_XRayImaging", "tables": ["EmrAcctRep_Images", "RegAcct_Main", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Radiography orders and report references; images remain external."},
+    "meddevice": {"sp": "FCAP1A_MedicalDevices", "tables": ["EmrPat_ImplDev", "SurCase_Implant", "CwsAppt_Main"], "note": "Patient implant registry, surgical implant detail, and loaned-device history."},
+    "genomics": {"sp": "FCAP1A_Genomics", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "EmrAcctRep_Images", "RegAcct_Main"], "note": "The dedicated genetic-results table is empty; the default build uses genomic order/report evidence."},
+    "biorepo": {"sp": "FCAP1A_Biorepository", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "EmrAcctRep_Images", "RegAcct_Main"], "note": "Biorepository order/report references only; authoritative aliquot inventory remains external."},
+    "eeg": {"sp": "FCAP1A_EEG", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "EmrAcctRep_Images", "RegAcct_Main"], "note": "EEG order/report evidence; waveform media remain external."},
+    "surgvideo": {"sp": "FCAP1A_SurgicalVideo", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "EmrAcctRep_Images", "RegAcct_Main"], "note": "Surgical-video references only; video assets remain external."},
+}
+
 # ---- build output ----
 SQL_ASSETS = data.get("procedures", [])
 ASSET_BY_ID = {asset["id"]: asset for asset in SQL_ASSETS}
@@ -394,6 +430,12 @@ total_topics = 0
 for pname, pid, topics in PHASES:
     t_out = []
     for tid, name, desc, avail, note, sp, tables in topics:
+        override = REMAINING_OVERRIDES.get(tid)
+        if override:
+            avail = "Yes"
+            note = override["note"]
+            sp = override["sp"]
+            tables = override["tables"]
         cat = CAT.get(tid)
         if cat is None:
             raise SystemExit("missing category for topic id: " + tid)

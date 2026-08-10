@@ -9,6 +9,7 @@ const PUBLIC_FILES = new Set([
   "404.html",
   "explorer.html",
   "index.html",
+  "mapping.html",
   "robots.txt",
   "sitemap.xml",
   "sp-review.html",

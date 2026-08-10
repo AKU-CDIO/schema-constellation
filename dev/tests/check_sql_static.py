@@ -39,5 +39,5 @@ for path in sorted(SQL_DIR.glob("*.sql")):
             errors.append((path.name, index_name, table, missing))
 
 assert not errors, errors
-assert len(list(SQL_DIR.glob("*.sql"))) == 31
-print("PASS: 31 SQL assets; all CREATE INDEX columns exist on their created tables")
+assert len(list(SQL_DIR.glob("*.sql"))) == 63
+print("PASS: 63 SQL assets; all CREATE INDEX columns exist on their created tables")

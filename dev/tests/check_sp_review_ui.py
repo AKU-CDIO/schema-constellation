@@ -11,20 +11,20 @@ with sync_playwright() as p:
     page.on("response", lambda r: bad_urls.add(r.url) if r.status >= 400 else None)
     page.on("pageerror", lambda err: errors.append(str(err)))
     page.goto("http://127.0.0.1:8123/sp-review.html")
-    page.wait_for_timeout(1500)
+    page.wait_for_function("document.querySelectorAll('.asset-card').length === 63", timeout=60000)
 
     assert page.locator("[data-topic]").count() == 54
-    assert page.locator(".asset-card").count() == 31
-    assert page.locator(".priority-card").count() >= 8
+    assert page.locator(".asset-card").count() == 63
+    assert page.locator(".priority-card").count() >= 7
     assert page.locator("#rvTotal").inner_text() == "54"
-    assert page.locator("#rvImplemented").inner_text() == "22"
-    assert page.locator("#rvShared").inner_text() == "4"
-    assert page.locator("#rvBlueprint").inner_text() == "4"
-    assert page.locator("#rvGap").inner_text() == "24"
+    assert page.locator("#rvImplemented").inner_text() == "54"
+    assert page.locator("#rvShared").inner_text() == "0"
+    assert page.locator("#rvBlueprint").inner_text() == "0"
+    assert page.locator("#rvGap").inner_text() == "0"
     assert page.locator("#rvEvent").inner_text() == "48"
 
     page.locator("#rvStatus").select_option("source-gap")
-    assert page.locator('[data-topic]:visible').count() == 24
+    assert page.locator('[data-topic]:visible').count() == 0
     page.locator("#rvStatus").select_option("")
     page.locator("#rvEventFilter").select_option("no")
     assert page.locator('[data-topic]:visible').count() == 6
@@ -33,10 +33,10 @@ with sync_playwright() as p:
     page.locator("#rvSearch").fill("Surgical Cases")
     assert page.locator('[data-topic]:visible').count() == 1
     surgery = page.locator("#review-surgery")
-    assert "BLUEPRINT" in surgery.inner_text().upper()
+    assert "IMPLEMENTED" in surgery.inner_text().upper()
     assert "EVENT-BASED: YES" in surgery.inner_text().upper()
     page.evaluate("document.querySelector('#review-surgery details').setAttribute('open', '')")
-    assert "Source readiness" in surgery.locator("pre").inner_text()
+    assert "Output health" in surgery.locator("pre").inner_text()
 
     page.locator("#rvSearch").fill("")
     diagnosis = page.locator("#review-diagnosis")
@@ -52,4 +52,4 @@ with sync_playwright() as p:
     assert not errors, errors
     browser.close()
 
-print("PASS: complete SP Review renders 54 searchable topic contracts and 31 asset audits")
+print("PASS: complete SP Review renders 54 searchable topic contracts and 63 asset audits")

@@ -100,7 +100,31 @@ PROPOSED = {
 }
 
 
-SHARED_TOPIC_IDS = {"problemlist", "medorders", "vaccines", "procorders"}
+EVIDENCE = {
+    "appointments": ("direct-structured", "Appointment header, audit, and populated resource detail"),
+    "problemlist": ("direct-structured", "Populated longitudinal problem sources"),
+    "medorders": ("direct-structured", "Order header, lifecycle, and dictionary"),
+    "procorders": ("direct-structured", "Order header, lifecycle, and dictionary"),
+    "infusions": ("direct-structured", "MAR infusion, titration, prescription, and bag activity"),
+    "social": ("direct-structured", "Patient and visit query responses plus query dictionary"),
+    "surgery": ("direct-structured", "Surgical case, procedure, operative time, and implant sources"),
+    "ob": ("direct-partial", "Pregnancy episode sources; actual delivery time is not confirmed"),
+    "vaccines": ("direct-structured", "Vaccine event, dose, lot, and dictionary"),
+    "otherreports": ("direct-structured", "Populated account report references"),
+    "registries": ("direct-structured", "Registry membership and longitudinal observations"),
+    "meddevice": ("direct-structured", "Patient and surgical implant records"),
+    "ecgecho": ("generic-relational", "Order/report evidence; no waveform or structured measurements"),
+    "pft": ("generic-relational", "Order/report evidence; no structured spirometry measures"),
+    "rhc": ("generic-relational", "Order/report evidence; no structured haemodynamics"),
+    "echo": ("generic-relational", "Order/report evidence; no structured echo measures"),
+    "gi": ("generic-relational", "Order/report evidence; procedure findings need validation"),
+    "genomics": ("generic-relational", "Dedicated genetic-result table is empty; using order/report evidence"),
+}
+for _topic in ("dicom", "ct", "pet", "mri", "us", "cath", "mammo", "dpath", "derm", "eye", "xray", "biorepo", "eeg", "surgvideo"):
+    EVIDENCE[_topic] = ("external-metadata", "Relational references only; authoritative media or inventory remains external")
+
+
+SHARED_TOPIC_IDS = set()
 
 
 DISCOVERY_TERMS = {
@@ -140,8 +164,10 @@ def audit_asset(asset, tables):
     path = os.path.join(SQL_DIR, asset["file"])
     text = io.open(path, encoding="utf-8-sig", errors="replace").read()
     declaration, proc_name, params = proc_header(text)
+    author_match = re.search(r"Author\s*:?\s*([^\r\n*]+)", text, re.I)
+    author = author_match.group(1).strip().rstrip("*/ ") if author_match else None
     flags = {
-        "declaration": declaration,
+        "declaration": declaration, "author": author,
         "procedure": proc_name,
         "parameters": params,
         "try_catch": bool(re.search(r"\bBEGIN\s+TRY\b", text, re.I)),
@@ -277,9 +303,19 @@ def main():
             missing_source_topics += 1
             missing_source_refs += len(missing_sources)
 
+        evidence_tier, evidence_note = EVIDENCE.get(topic["id"], ("implemented-build", "Checked-in FCAP1A build procedure"))
         table_context = {"output": output}
         query, detected_event_time, output_time_cols, query_kind = validation_query(topic, table_context, planned, tables, event_based, event_time, status)
         findings, recommendations = [], []
+        if evidence_tier == "generic-relational":
+            findings.append(evidence_note + ".")
+            recommendations.append("Validate topic-filter sensitivity and specificity against the owning clinical system before acceptance.")
+        elif evidence_tier == "external-metadata":
+            findings.append(evidence_note + ".")
+            recommendations.append("Onboard authoritative external identifiers, consent, retention, and access controls.")
+        elif evidence_tier == "direct-partial":
+            findings.append(evidence_note + ".")
+            recommendations.append("Confirm and add the missing structured event field before clinical acceptance.")
         if status == "source-gap":
             findings.append("No curated domain source contract or implemented build exists.")
             recommendations.extend(["Confirm the owning clinical system and land the domain tables.", "Define patient, encounter, consent, retention, and event-time linkage before implementation."])
@@ -313,7 +349,7 @@ def main():
         recommendations = list(dict.fromkeys(recommendations))
         if status in {"source-gap", "blueprint"} or (audit and not audit["try_catch"]) or len(missing_sources) >= 3:
             priority = "high"
-        elif status == "shared" or missing_sources or (audit and audit["drop_publish"]):
+        elif evidence_tier in {"generic-relational", "external-metadata", "direct-partial"} or status == "shared" or missing_sources or (audit and audit["drop_publish"]):
             priority = "medium"
         else:
             priority = "low"
@@ -326,7 +362,8 @@ def main():
             "output_time_columns": output_time_cols, "event_rationale": rationale,
             "planned_sources": planned, "sql_sources": sql_read,
             "missing_sources": missing_sources, "extra_sources": extra_sources,
-            "asset": procedure if audit else None, "findings": findings,
+            "asset": procedure if audit else None, "author": audit.get("author") if audit else None,
+            "evidence_tier": evidence_tier, "evidence_note": evidence_note, "findings": findings,
             "recommendations": recommendations, "query": query, "query_kind": query_kind,
         })
 
@@ -346,14 +383,13 @@ def main():
         "indexed_primary": sum(a["index_count"] > 0 for a in primary_audits),
     }
     priorities = [
-        {"priority": "high", "title": "Close 28 unimplemented topic contracts", "detail": f"{status_counts['source-gap']} topics need source onboarding and {status_counts['blueprint']} have sources but still need their primary build."},
+        {"priority": "high" if status_counts["source-gap"] + status_counts["blueprint"] else "low", "title": "Dedicated procedure coverage", "detail": f"{len(reviews) - status_counts['source-gap'] - status_counts['blueprint']} of {len(reviews)} topics now have checked-in procedures; partial and external evidence tiers remain clearly labelled."},
         {"priority": "high", "title": "Reconcile source-to-SQL coverage", "detail": f"{missing_source_topics} implemented/shared topics list {missing_source_refs} planned source references that their primary SQL does not read."},
         {"priority": "high", "title": "Make publication atomic", "detail": f"All {summary['drop_publish_primary']} implemented primary procedures use DROP/CREATE publication; use staged tables plus a short transactional swap."},
         {"priority": "high", "title": "Harden failure semantics", "detail": f"{summary['try_catch_primary']} of {len(primary_audits)} primary procedures have TRY/CATCH, but only {summary['xact_abort_primary']} enables XACT_ABORT and {summary['transaction_primary']} uses an explicit transaction."},
         {"priority": "medium", "title": "Standardise repeatable deployment", "detail": f"{summary['alter_only_primary']} primary procedures are ALTER-only and fail on a clean environment; normalise on CREATE OR ALTER."},
         {"priority": "medium", "title": "Add incremental execution contracts", "detail": f"Only {summary['parameterized_primary']} of {len(primary_audits)} primary procedures exposes formal parameters; add date windows or watermarks without changing clinical-event semantics."},
         {"priority": "medium", "title": "Define physical output contracts", "detail": f"Only {summary['indexed_primary']} of {len(primary_audits)} primary procedures creates output indexes; define patient, visit, event-time, and natural-key indexes by grain."},
-        {"priority": "medium", "title": "Split four shared topic contracts", "detail": "Problem List, Medication Orders, Vaccines, and Procedure Orders currently reuse another domain procedure; give each a dedicated output or a tested semantic view."},
     ]
     payload = {
         "meta": {"generated": dt.date.today().isoformat(), "method": "Static review of checked-in SQL plus curated topic and schema contracts."},

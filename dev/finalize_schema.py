@@ -19,6 +19,8 @@ import re
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_PATH = os.path.join(ROOT, "data", "schema.js")
 SQL_DIR = os.path.join(ROOT, "dev", "fcap1a_utf8")
+REMAINING_SOURCE_PATH = os.path.join(ROOT, "dev", "remaining_source_metadata.json")
+SOURCE_ROW_COUNTS_PATH = os.path.join(ROOT, "dev", "source_row_counts.json")
 
 
 def load_schema():
@@ -186,7 +188,24 @@ def has_cols(table, *names):
 def main():
     data = load_schema()
     tables = data["tables"]
+    if os.path.exists(REMAINING_SOURCE_PATH):
+        with io.open(REMAINING_SOURCE_PATH, encoding="utf-8") as handle:
+            remaining_sources = json.load(handle)
+        for name in list(tables):
+            if tables[name].get("topic") == "remaining" and name not in remaining_sources:
+                del tables[name]
+        for name, definition in remaining_sources.items():
+            if name not in tables or len(definition.get("cols", [])) > len(tables[name].get("cols", [])):
+                tables[name] = definition
     assets, db_votes = parse_sql_assets(tables)
+
+    source_counts = {"near_empty_threshold": 1000, "tables": {}}
+    if os.path.exists(SOURCE_ROW_COUNTS_PATH):
+        with io.open(SOURCE_ROW_COUNTS_PATH, encoding="utf-8") as handle:
+            source_counts = json.load(handle)
+    counts_by_name = collections.defaultdict(list)
+    for qualified, count_data in source_counts.get("tables", {}).items():
+        counts_by_name[qualified.rsplit(".", 1)[-1]].append((qualified, count_data))
 
     for name, table in tables.items():
         if table.get("role") == "cohort":
@@ -197,6 +216,15 @@ def main():
         database = votes.most_common(1)[0][0] if votes else "AKULiveATdb"
         table["db"] = database
         table["dbs"] = sorted(votes) if votes else [database]
+        candidates = counts_by_name.get(name, [])
+        selected = next((value for qualified, value in candidates if qualified.startswith(database + ".")), None)
+        if selected is None and len(candidates) == 1:
+            selected = candidates[0][1]
+        if selected is not None:
+            table["row_count"] = selected.get("rows")
+            table["catalog_column_count"] = selected.get("columns")
+            table["row_quality"] = selected.get("quality")
+            table["default_visible"] = selected.get("default_visible", True)
 
     rels = data["rels"]
     for rel in rels:
@@ -294,6 +322,14 @@ def main():
     kind_counts = collections.Counter(rel["kind"] for rel in rels)
     data["meta"]["generated"] = dt.date.today().isoformat()
     data["meta"]["source"] = "INFORMATION_SCHEMA.COLUMNS workbook (info_schema.csv, XLSX content) + %d FCAP1A SQL assets" % len(assets)
+    source_quality = collections.Counter(
+        table.get("row_quality", "unknown") for table in tables.values() if table.get("role") != "cohort"
+    )
+    data["meta"]["row_count_model"] = {
+        "near_empty_threshold": source_counts.get("near_empty_threshold", 1000),
+        "curated_sources": sum(source_quality.values()), "by_quality": dict(sorted(source_quality.items())),
+        "default": "hide empty and near-empty source tables",
+    }
     data["meta"]["relationship_model"] = {
         "total": len(rels),
         "by_kind": dict(sorted(kind_counts.items())),

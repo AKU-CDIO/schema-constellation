@@ -345,6 +345,7 @@
   <div class="main">
     <aside>
       <div class="side-scroll">
+        <label class="vf" id="usableWrap" title="Hide source tables with zero or fewer than 1,000 rows"><input type="checkbox" id="usableOnly" checked><span>Populated tables only</span><b id="usableCount">—</b></label>
         <label class="vf" id="vfWrap" title="Show only source tables that carry a VisitID"><input type="checkbox" id="visitOnly"><span>Visit-grained tables only</span><b id="vfCount">67</b></label>
         <label class="vf" id="allLinksWrap" title="Show schema-derived and key-grain links in addition to the curated overview"><input type="checkbox" id="allLinks"><span>All documented links</span><b id="allLinksCount">—</b></label>
         <div class="side-label">Data Topics</div>
@@ -613,6 +614,7 @@ function splitName(name, compact){
    FCAP1A cohort/pipeline tables (role "cohort") are stored-procedure OUTPUTS;
    they are excluded from the page-1 star schema (see sps.html for the SPs). */
 const isSource = n => DATA.tables[n] && DATA.tables[n].role !== "cohort";
+const isPopulated = n => { const t=DATA.tables[n]||{}; return t.row_count == null || Number(t.row_count) >= Number((DATA.meta.row_count_model||{}).near_empty_threshold||1000); };
 const curatedIds = Object.keys(DATA.tables);
 const relByFrom = {}, relByTo = {};
 DATA.rels.forEach(r => {
@@ -815,9 +817,10 @@ function joinKeyOf(name){
 }
 
 function visibleIds(){
-  const vf = document.getElementById("visitOnly");
-  const onlyVisit = vf && vf.checked;
-  const filt = s => { if (!onlyVisit) return s; return new Set([...s].filter(n => hasVisitID(DATA.tables[n]))); };
+  const vf = document.getElementById("visitOnly"), uf = document.getElementById("usableOnly");
+  const onlyVisit = vf && vf.checked, populatedOnly = !uf || uf.checked;
+  const filt = s => new Set([...s].filter(n => (!onlyVisit || hasVisitID(DATA.tables[n])) &&
+      (!populatedOnly || !isSource(n) || isPopulated(n) || n === state.focusTable)));
   if (state.mode === "overview") return filt(new Set(Object.keys(DATA.tables).filter(isSource)));
   if (state.mode === "doc"){
     const ds = new Set([...(state.docIds || [])].filter(isSource));
@@ -1266,6 +1269,7 @@ function renderDetail(name, viaTopic){
     <span class="chip star" style="background:${st.color};border-color:${st.color}">${esc(st.label)}</span>
     <span class="chip ext">${esc(db)}</span>`;
   if (t.pk) badges += `<span class="chip pk">PK ${esc(t.pk.join(", "))}</span>`;
+  if (t.row_count != null) badges += `<span class="chip ${isPopulated(name)?"ext":"pk"}">${Number(t.row_count).toLocaleString()} rows · ${esc(t.row_quality||"unknown")}</span>`;
 
   /* key columns */
   const keyCols = (t.cols || []).filter(c => (t.pk || []).includes(c.n) || c.nn || c.fk);
@@ -1739,6 +1743,14 @@ function init(){
   buildSidebar();
   buildLegend();
   attachSvgEvents();
+
+  const uf = $("#usableOnly");
+  if (uf){
+    const src=Object.keys(DATA.tables).filter(isSource), populated=src.filter(isPopulated).length;
+    $("#usableCount").textContent=populated;
+    $("#usableWrap").title=`Show populated or unknown source tables by default (${populated} shown; ${src.length-populated} empty or near-empty retained for audit)`;
+    uf.addEventListener("change",()=>{state.count=visibleIds().size;fitToExtent();render();});
+  }
 
   const vf = $("#visitOnly");
   if (vf){

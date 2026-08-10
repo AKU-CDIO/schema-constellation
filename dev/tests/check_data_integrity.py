@@ -23,11 +23,11 @@ rels = schema["rels"]
 assets = {asset["id"]: asset for asset in schema["procedures"]}
 topics = [topic for phase in phases["phases"] for topic in phase["topics"]]
 
-assert len(tables) == 206
-assert sum(table.get("role") != "cohort" for table in tables.values()) == 170
-assert sum(table.get("role") == "cohort" for table in tables.values()) == 36
-assert len(rels) == 449
-assert len(assets) == 31
+assert len(tables) == 261
+assert sum(table.get("role") != "cohort" for table in tables.values()) == 193
+assert sum(table.get("role") == "cohort" for table in tables.values()) == 68
+assert len(rels) == 645
+assert len(assets) == 63
 assert len(topics) == 54
 
 required_rel_fields = {"from", "to", "on", "card", "note", "kind", "evidence", "confidence", "graph"}
@@ -53,15 +53,15 @@ for rel in rels:
 assert not sorted(name for name in source if degree[name] == 0)
 
 evidence = Counter(rel["evidence"] for rel in rels)
-assert evidence == Counter({"procedure": 196, "curated": 101, "schema-fk": 63, "key-grain": 42, "pipeline": 35, "table-family": 12})
+assert evidence == Counter({"procedure": 374, "curated": 101, "schema-fk": 63, "key-grain": 53, "pipeline": 35, "table-family": 19})
 assert schema["meta"]["relationship_model"]["total"] == len(rels)
 assert schema["meta"]["relationship_model"]["by_evidence"] == dict(sorted(evidence.items()))
 
 plans = [topic for topic in topics if topic.get("sp")]
-assert len(plans) == 30
-assert sum(topic["sp"]["status"] == "implemented" for topic in plans) == 26
-assert sum(topic["sp"]["status"] == "blueprint" for topic in plans) == 4
-assert {topic["id"] for topic in plans if topic["sp"]["status"] == "blueprint"} == {"appointments", "surgery", "otherreports", "registries"}
+assert len(plans) == 54
+assert sum(topic["sp"]["status"] == "implemented" for topic in plans) == 54
+assert sum(topic["sp"]["status"] == "blueprint" for topic in plans) == 0
+assert not {topic["id"] for topic in plans if topic["sp"]["status"] == "blueprint"}
 
 for topic in topics:
     if topic["avail"] == "Yes" and topic["tables"]:
@@ -79,4 +79,4 @@ for expected in ("tbl_FCAP1A_ClaimsData", "tbl_FCAP1A_PatientInsurance", "tbl_FC
     assert expected in tables
     assert tables[expected]["role"] == "cohort"
 
-print("PASS: 206 tables, 449 relationships, 31 SQL assets, 30 plans (26 implemented / 4 blueprints)")
+print("PASS: 261 tables, 645 relationships, 63 SQL assets, 54 implemented plans")

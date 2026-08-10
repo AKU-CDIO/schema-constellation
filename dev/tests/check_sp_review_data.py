@@ -22,13 +22,13 @@ topics = review["topics"]
 assets = review["assets"]
 
 assert len(topics) == 54
-assert len(assets) == 31
-assert Counter(item["status"] for item in topics) == Counter({"source-gap": 24, "implemented": 22, "blueprint": 4, "shared": 4})
+assert len(assets) == 63
+assert Counter(item["status"] for item in topics) == Counter({"implemented": 54})
 assert Counter(item["event_based"] for item in topics) == Counter({True: 48, False: 6})
-assert {item["id"] for item in topics if item["status"] == "shared"} == {"problemlist", "medorders", "vaccines", "procorders"}
-assert {item["id"] for item in topics if item["status"] == "blueprint"} == {"appointments", "surgery", "otherreports", "registries"}
+assert not {item["id"] for item in topics if item["status"] == "shared"}
+assert not {item["id"] for item in topics if item["status"] == "blueprint"}
 
-required = {"id", "name", "description", "procedure", "output", "status", "priority", "event_based", "event_model", "grain", "canonical_time", "event_rationale", "planned_sources", "sql_sources", "findings", "recommendations", "query", "query_kind"}
+required = {"id", "name", "description", "procedure", "output", "status", "priority", "event_based", "event_model", "grain", "canonical_time", "event_rationale", "planned_sources", "sql_sources", "findings", "recommendations", "query", "query_kind", "author", "evidence_tier"}
 for item in topics:
     assert required <= set(item), item["id"]
     assert item["procedure"].startswith("usp_Build_FCAP1A_")
@@ -43,20 +43,20 @@ for item in topics:
 
 summary = review["summary"]
 assert summary["topics"] == 54
-assert summary["primary_implemented_procedures"] == 22
-assert summary["planned_source_gap_topics"] == 15
-assert summary["planned_source_gap_references"] == 44
+assert summary["primary_implemented_procedures"] == 54
+assert summary["planned_source_gap_topics"] == 12
+assert summary["planned_source_gap_references"] == 31
 assert summary["drop_publish_primary"] == 22
-assert summary["try_catch_primary"] == 21
-assert summary["xact_abort_primary"] == 1
-assert summary["transaction_primary"] == 1
-assert summary["parameterized_primary"] == 1
-assert summary["indexed_primary"] == 5
-assert len(review["priorities"]) >= 8
+assert summary["try_catch_primary"] == 53
+assert summary["xact_abort_primary"] == 33
+assert summary["transaction_primary"] == 33
+assert summary["parameterized_primary"] == 33
+assert summary["indexed_primary"] == 37
+assert len(review["priorities"]) >= 7
 
 asset_ids = {asset["id"] for asset in schema["procedures"]}
 assert set(assets) == asset_ids
 for asset_id, audit in assets.items():
     assert {"declaration", "parameters", "try_catch", "xact_abort", "transaction", "run_logging", "drop_publish", "index_count", "findings"} <= set(audit), asset_id
 
-print("PASS: 54 topic contracts, 31 audited SQL assets, event/grain/query/gap coverage complete")
+print("PASS: 54 implemented topic contracts, 63 audited SQL assets, event/grain/query/evidence coverage complete")
