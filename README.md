@@ -54,7 +54,7 @@ The site is static and served from Google Cloud Storage. Deploy with no-cache he
 
 ```powershell
 gsutil -m -h "Cache-Control: public, max-age=0, must-revalidate" cp `
-  -r index.html explorer.html topics.html sql.html sps.html 404.html assets data `
+  -r index.html explorer.html topics.html sql.html sps.html sp-review.html 404.html sitemap.xml robots.txt assets data `
   gs://cdio-migration-schema-constellation
 ```
 
@@ -73,3 +73,9 @@ The fcap1a stored-procedure sources used for SP semantics are in `dev/fcap1a_utf
 - `data/phases.js` distinguishes checked-in **implemented** procedures from **blueprints** and carries the full SQL asset catalog.
 - The source named `info_schema.csv` contains XLSX workbook bytes (17,094 tables / 143,082 columns); do not parse it as comma-separated text.
 - Run `python dev/finalize_schema.py` before `python dev/build_phases.py` whenever SQL assets or the schema catalog change.
+
+## Complete SP quality review
+
+- `dev/build_sp_review.py` audits all checked-in SQL assets and emits `data/sp_review.js`.
+- `sp-review.html` provides a searchable contract for all 54 data topics: procedure/output name, description, implementation status, data grain, event-based classification, canonical time, planned-vs-SQL sources, findings, recommendations, and an executable validation or source-discovery query.
+- Regenerate it after schema, topic, or SQL changes with `python dev/build_sp_review.py`.

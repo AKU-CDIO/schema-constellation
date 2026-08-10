@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from playwright.sync_api import sync_playwright
 
-pages = ["index.html", "explorer.html", "topics.html", "sql.html", "404.html"]
+pages = ["index.html", "explorer.html", "topics.html", "sql.html", "sps.html", "sp-review.html", "404.html"]
 with sync_playwright() as p:
     b = p.chromium.launch()
     for pg_name in pages:
