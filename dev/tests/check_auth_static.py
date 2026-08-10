@@ -15,7 +15,7 @@ PAGES = [
 
 def main() -> None:
     server = (ROOT / "server.js").read_text(encoding="utf-8")
-    auth = (ROOT / "assets" / "auth.js").read_text(encoding="utf-8")
+    auth = (ROOT / "assets" / "account.js").read_text(encoding="utf-8")
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
     assert 'x-goog-authenticated-user-email' in server
@@ -28,7 +28,7 @@ def main() -> None:
 
     for page in PAGES:
         html = (ROOT / page).read_text(encoding="utf-8")
-        assert 'src="assets/auth.js?v=1"' in html, page
+        assert 'src="assets/account.js?v=1"' in html, page
 
     print("PASS auth integration: IAP headers, session UI, protected server, and all pages")
 

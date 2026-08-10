@@ -86,6 +86,6 @@ The fcap1a stored-procedure sources used for SP semantics are in `dev/fcap1a_utf
 The production platform runs on Google Cloud Run with Identity-Aware Proxy (IAP) enabled directly on the service. IAP handles Google sign-in and GCP IAM controls which users or groups can open the platform. The application rejects Cloud Run requests that do not carry the authenticated IAP identity headers.
 
 - server.js serves the static platform, exposes the signed-in account at /auth/session, and applies security headers.
-- assets/auth.js displays the active Google account and provides an IAP account-switch action.
+- assets/account.js displays the active Google account and provides profile, security, and platform sign-out actions.
 - Dockerfile packages the site for Cloud Run without third-party runtime dependencies.
 - Keep the legacy GCS bucket private after the Cloud Run service is verified; otherwise its object URLs bypass IAP.
