@@ -55,6 +55,8 @@ for required in [
 ]:
     assert required in explorer, required
 assert explorer.index('Topic assembly query') < explorer.index('<h3>Stored procedure') < explorer.index('<h3>Validation query')
+assert explorer.index('<h3>Stored procedure') < explorer.index('Join evidence -') < explorer.index('<h3>Validation query')
+assert 'row.addEventListener("click", () => renderDocTopic(it));' in explorer
 
 home = (ROOT / "index.html").read_text(encoding="utf-8")
 assert "Welcome to the" in home and "process-flow" in home

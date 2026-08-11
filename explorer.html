@@ -119,6 +119,8 @@
 
   .dtopic{padding:6px 10px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s}
   .dtopic:hover{background:rgba(47,107,255,.06)}
+  .dtopic.active{background:rgba(47,107,255,.1);box-shadow:inset 0 0 0 1px rgba(47,107,255,.24)}
+  .dtopic.active .tname{color:var(--accent);font-weight:700}
   .dtopic .tname{font-size:12.5px;color:var(--txt);flex:1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dtopic .davail{font-size:9.5px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:6px;flex:none}
   .dtopic .davail.yes{color:#047857;background:rgba(5,150,105,.12)}
@@ -557,14 +559,14 @@ function spSectionHTML(p){
       </h3>
       <div class="dl" style="margin-top:6px">Output: <b>CDIO_MeditechDB.dbo.${esc(p.out)}</b> | ${p.members.length} source tables | Author: <b>test</b></div>
       <div class="sqlbox" style="margin-top:10px"><div style="display:flex;flex-wrap:wrap;gap:5px">${tables}</div></div>
-      <div class="sec" style="margin-top:14px"><h3>Join evidence - ${esc(p.item.t)}</h3>${joins}
-        ${unresolved.length ? `<div class="notable" style="margin-top:8px">${unresolved.length} dashed topic association(s) have no validated SQL join key and are deliberately excluded from the assembly query.</div>` : ""}
-      </div>
       <div class="sec" style="margin-top:14px"><h3>Topic assembly query</h3>
         <div class="badges" style="margin:0 0 8px"><span class="chip pk">read only</span><span class="chip ext">${joinRels.length} evidence-backed links</span></div>
         <div class="sqlbox"><pre>${esc(context.query || "-- Topic assembly query is not available.")}</pre></div>
       </div>
       <div class="sec" style="margin-top:14px"><h3>Stored procedure</h3>${procedures}</div>
+      <div class="sec" style="margin-top:14px"><h3>Join evidence - ${esc(p.item.t)}</h3>${joins}
+        ${unresolved.length ? `<div class="notable" style="margin-top:8px">${unresolved.length} dashed topic association(s) have no validated SQL join key and are deliberately excluded from the assembly query.</div>` : ""}
+      </div>
       <div class="sec" style="margin-top:14px"><h3>Validation query</h3>
         <div class="badges" style="margin:0 0 8px">
           <span class="chip pk">${p.members.length} sources</span>
@@ -1528,11 +1530,13 @@ function renderDocTopic(t){
       ${note}
     </div>
     <div class="detail-body">
+      ${spSections || spNote}
       ${curList}
       ${graphBtn}
-      ${spSections || spNote}
     </div>`;
   detail.classList.remove("hidden");
+  detail.scrollTop = 0;
+  document.querySelectorAll(".dtopic").forEach(el => el.classList.toggle("active", el.dataset.topicId === t.id));
   detail.querySelectorAll("[data-crumb]").forEach(el => el.addEventListener("click", () => setView("overview")));
   detail.querySelectorAll(".cg-tbl[data-n]").forEach(el => {
     el.addEventListener("click", () => selectTable(el.getAttribute("data-n")));
@@ -1603,6 +1607,7 @@ function pushHash(h){
 function closePanels(){
   const d = $("#detail");
   if (d) d.classList.add("hidden");
+  document.querySelectorAll(".dtopic.active").forEach(el => el.classList.remove("active"));
 }
 function routeFromHash(){
   const h = location.hash;
@@ -1739,8 +1744,13 @@ function buildSidebar(){
       const grp = PHASES.find(g => g.items.includes(it));
       const row = document.createElement("div");
       row.className = "dtopic";
+      row.dataset.topicId = it.id;
+      row.setAttribute("role", "button");
+      row.setAttribute("tabindex", "0");
+      row.setAttribute("aria-label", `Open ${it.t} query and stored procedure`);
       row.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${(grp && grp.color) || "#2f6bff"};flex:none" title="${esc((grp && grp.p) || "")}"></span><span class="tname">${esc(it.t)}</span>${it.sp ? `<span class="davail yes">SP</span>` : ""}<span class="davail ${docAvailCls(it.a)}">${docAvailTxt(it.a)}</span>`;
-      row.addEventListener("click", () => { closePanels(); showDocInGraph(it); });
+      row.addEventListener("click", () => renderDocTopic(it));
+      row.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); renderDocTopic(it); } });
       body.appendChild(row);
     });
     head.addEventListener("click", () => {
