@@ -8,14 +8,17 @@ Live: `https://schema-constellation-864230826730.us-central1.run.app/index.html`
 
 | File | Purpose |
 |------|---------|
-| `index.html` | Landing page · constellation overview, stats, join-key legend, link to each data topic. |
-| `topics.html` | Data Topics · each clinical domain as a block with source tables, join plan, visit spine, validation SQL, and a **trace one patient** generator. Deep link: `topics.html#<topic-id>`. |
-| `explorer.html` | Interactive constellation · click a table to see neighbours, join keys and relationships. Sidebar offers a **VisitID-only** filter. Deep link: `explorer.html?table=<name>`. |
-| `sql.html` | SQL cookbook · reusable query patterns. |
-| `sps.html` | SP workspace · per-topic validation SQL generated from the FCAP1A stored procedures. Search + deep link: `sps.html#<topic-id>`. |
+| `index.html` | Concise AKU-CDIO Meditech welcome, platform totals, and four-step topic-to-SP flow. |
+| `topics.html` | Data Topics grouped into the five delivery phases. |
+| `explorer.html` | Interactive constellation with composite-key links, topic assembly SQL, exact checked-in SP source, and validation SQL. Deep link: `explorer.html#topic=doc:<topic-name>`. |
+| `sql.html` | Reusable query patterns and clinical examples. |
+| `mapping.html` | Chronological MEDITECH-to-AKU mapping workflow, official reference, INFORMATION_SCHEMA substitutions, and relationship gate. |
+| `sps.html` | Per-topic SP workspace and trace validation. |
+| `sp-review.html` | Complete 54-topic SP quality, event model, evidence, gap, and recommendation review. |
 | `404.html` | Missing-route fallback. |
-| `assets/site.css` | Shared styles (also inline `<style>` blocks per page). |
-| `data/schema.js` | `window.SCHEMA_DATA` — tables, relationships, topics. |
+| `data/schema.js` | Tables, relationships, topics, row counts, and evidence metadata. |
+| `data/phases.js` | The 54 implemented topic contracts and 63 SQL assets. |
+| `data/sp_source.js` | Generated exact SQL, procedure-confirmed topic links, and read-only assembly queries. |
 
 ## Serve locally
 
@@ -40,6 +43,7 @@ python dev/tests/check_remaining_topics.py
 python dev/tests/check_sp_review_data.py
 python dev/tests/check_sql_static.py
 python dev/tests/check_production_readiness.py
+python dev/tests/check_topic_connections.py
 node dev/tests/check_auth_runtime.js
 ```
 
@@ -71,6 +75,7 @@ The fcap1a stored-procedure sources used for SP semantics are in `dev/fcap1a_utf
 - `data/phases.js` distinguishes checked-in **implemented** procedures from **blueprints** and carries the full SQL asset catalog.
 - The source named `info_schema.csv` contains XLSX workbook bytes (17,094 tables / 143,082 columns); do not parse it as comma-separated text.
 - Run `python dev/finalize_schema.py` before `python dev/build_phases.py` whenever SQL assets or the schema catalog change.
+- Run `python dev/build_sp_source.py` after any topic, relationship, or SQL change; it emits the Explorer's full SP source, procedure-confirmed joins, evidence-labelled fallback associations, and read-only assembly queries.
 
 ## Complete SP quality review
 

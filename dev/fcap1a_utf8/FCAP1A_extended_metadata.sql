@@ -1,3 +1,4 @@
+/* Author: test */
 USE [CDIO_MeditechDB];
 GO
 

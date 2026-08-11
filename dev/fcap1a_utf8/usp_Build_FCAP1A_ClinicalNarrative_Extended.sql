@@ -1,3 +1,4 @@
+/* Author: test */
 ﻿USE [CDIO_MeditechDB]
 GO
 /****** Object:  StoredProcedure [dbo].[usp_Build_FCAP1A_ClinicalNarrative_Extended]    Script Date: 7/13/2026 12:33:23 PM ******/

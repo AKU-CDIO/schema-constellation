@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Keys to Data Mapping · AKU CDIO MAYO</title>
-<link rel="stylesheet" href="assets/site.css?v=77">
+<link rel="stylesheet" href="assets/site.css?v=78">
 <link rel="stylesheet" href="assets/account.css?v=2">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <meta name="description" content="Validated structural mapping for the AKU Meditech Data Repository: catalog inventory, candidate grain, evidence limits, and production relationship checks.">
@@ -37,13 +37,36 @@
   <div class="wrap">
     <div class="section-title">Data Mapping Guide</div>
     <h1>Keys to Data Mapping</h1>
-    <p class="lead">The AKU Meditech Data Repository exposes EMR data in <span class="code-chip">AKULiveATdb.dbo</span>, with 17,094 base tables and 143,082 base-table columns. This guide follows MEDITECH's documented data-mapping workflow while being explicit about the evidence available here: the AKU extract contains <b>no SysDrTables or SysDrColumns</b>, so structural discovery is supported, but official NPR lineage and official MEDITECH key levels cannot be reconstructed from this extract alone.</p>
+    <p class="lead">The AKU Meditech Data Repository exposes EMR data in <span class="code-chip">AKULiveATdb.dbo</span>, with 17,094 base tables and 143,082 base-table columns. This page reproduces MEDITECH's mapping sequence for the evidence available at AKU: <b>INFORMATION_SCHEMA</b> replaces structural discovery only; it does not replace the absent <b>SysDrTables</b> or <b>SysDrColumns</b>.</p>
+    <div class="actions" style="margin-top:22px">
+      <a class="btn primary" href="https://home.meditech.com/en/d/clientservicesccimages/otherfiles/2013marchnewsletterdatamapping.pdf" target="_blank" rel="noopener noreferrer">Open official MEDITECH guide <span class="arr">&rarr;</span></a>
+      <a class="btn ghost" href="#aku-workflow">Follow the AKU workflow</a>
+    </div>
   </div>
 </header>
 
-<section>
+
+<section id="aku-workflow" class="mapping-workflow">
   <div class="wrap">
-    <div class="section-title">Validated for the AKU extract</div>
+    <div class="section-title">Chronological workflow</div>
+    <h2 class="section-head">MEDITECH's method, translated to the AKU evidence</h2>
+    <p class="section-sub">Follow these steps in order. Each step states what MEDITECH's native mapping layer would provide, what INFORMATION_SCHEMA can reproduce here, and where a procedure or human validation is still required.</p>
+    <div class="mapping-flow">
+      <a class="mapping-step" href="#map-boundary"><span class="map-index">01</span><div><b>Set the evidence boundary</b><p>Confirm the database: this AKU extract contains no SysDrTables or SysDrColumns. Do not claim official NPR lineage or MEDITECH Keylevel values.</p></div></a>
+      <a class="mapping-step" href="#map-tables"><span class="map-index">02</span><div><b>Inventory reportable tables</b><p>Use INFORMATION_SCHEMA.TABLES in place of the SysDrTables list. TABLE_NAME and TABLE_SCHEMA are available; TableID, Application and Keylevel are not.</p></div></a>
+      <a class="mapping-step" href="#map-grain"><span class="map-index">03</span><div><b>Classify candidate grain</b><p>MEDITECH defines PS, PM, PF, PV, V, VF, NP, T and D. AKU can only infer P?, PV?, V? and NP? from PatientID and VisitID until native metadata is supplied.</p></div></a>
+      <a class="mapping-step" href="#map-columns"><span class="map-index">04</span><div><b>Inventory columns</b><p>Use INFORMATION_SCHEMA.COLUMNS for name, type, length, position and nullability. SortKey, NprDpm, NprSegment and NprElement remain unavailable.</p></div></a>
+      <a class="mapping-step" href="#map-search"><span class="map-index">05</span><div><b>Locate data in either direction</b><p>Search a known SQL column across tables or list a known table's columns. Matching names create candidates; they do not prove a shared NPR element.</p></div></a>
+      <a class="mapping-step" href="#map-lineage"><span class="map-index">06</span><div><b>Resolve MEDITECH lineage</b><p>Use Shift+F9, Table Inquiry or Field Inquiry for DPM, segment and element. Request an authorized SysDr export when production lineage must be proven.</p></div></a>
+      <a class="mapping-step" href="#map-link"><span class="map-index">07</span><div><b>Link and test tables</b><p>Prefer joins already used by checked-in procedures. For inferred PI + VI or SI + VI links, test uniqueness, nulls, orphans and row amplification.</p></div></a>
+      <a class="mapping-step" href="#map-operationalize"><span class="map-index">08</span><div><b>Operationalize the topic</b><p>Review the Explorer graph, run the topic assembly query, inspect the stored procedure, then execute its validation query before publication.</p></div></a>
+    </div>
+  </div>
+</section>
+
+<section id="map-boundary">
+  <div class="wrap">
+    <div class="section-title">Step 1 - Validated for the AKU extract</div>
     <h2 class="section-head">Structural mapping is feasible; source lineage is only partial</h2>
     <p>The supplied <span class="code-chip">Information_Schema_column_row_counts.csv</span> was checked against the site model. It contains 17,095 catalog objects: 17,094 base-table inventories plus one reporting view whose row count is unknown. The 143,082 base-column total reconciles exactly with the site catalog. This evidence can prove names, types, positions, nullability and row-count bands; it cannot prove primary keys, NPR DPM/segment/element lineage, feeder application, or a join's correctness.</p>
     <div class="stats" style="margin-top:22px">
@@ -81,9 +104,9 @@
   </div>
 </section>
 
-<section>
+<section id="map-tables">
   <div class="wrap">
-    <div class="section-title">Table catalog</div>
+    <div class="section-title">Step 2 - Table catalog</div>
     <h2 class="section-head">Every table you can query, with a candidate grain</h2>
     <p>The available catalog fields are <b>TABLE_NAME</b> (for example <span class="code-chip">EmrPat_Allergies</span>), <b>TABLE_CATALOG</b> (<span class="code-chip">AKULiveATdb</span> here), <b>TABLE_SCHEMA</b> (<span class="code-chip">dbo</span>) and <b>TABLE_TYPE</b>. Candidate row grain is inferred separately from marker-column presence and must not be presented as MEDITECH's official Keylevel.</p>
     <div class="code-card"><pre><code><span class="cm">-- (1) The complete list of tables available for reporting</span>
@@ -104,7 +127,7 @@
 <span class="fn">SELECT</span> TABLE_NAME <span class="fn">FROM</span> INFORMATION_SCHEMA.TABLES
  <span class="fn">WHERE</span> TABLE_NAME <span class="fn">LIKE</span> <span class="st">'RegAcct%'</span>; <span class="cm">-- Reg = registration / accounts</span></code></pre></div>
 
-    <div class="section-title" style="margin-top:2.4rem">Candidate grain</div>
+    <div class="section-title" id="map-grain" style="margin-top:2.4rem">Step 3 - Candidate grain</div>
     <h2 class="section-head">What marker columns suggest - and what they do not prove</h2>
     <p>Because official Keylevel and SortKey metadata are unavailable, the site assigns a <b>candidate grain family</b> only from the presence of PatientID, VisitID and SourceID. The question marks are deliberate: these labels do not distinguish primary keys from foreign keys or singular from repeating rows. The counts reconcile to all 17,094 base tables:</p>
     <table class="mt-table">
@@ -153,9 +176,9 @@ ORDER BY TABLE_NAME;</code></pre></div>
   </div>
 </section>
 
-<section>
+<section id="map-columns">
   <div class="wrap">
-    <div class="section-title">Column catalog</div>
+    <div class="section-title">Step 4 - Column catalog</div>
     <h2 class="section-head">Every column, with its type and length</h2>
     <p>Each row in <span class="code-chip">INFORMATION_SCHEMA.COLUMNS</span> is one column available to you. Columns to note: <b>COLUMN_NAME</b>, <b>DATA_TYPE</b> (varchar, int, datetime…), <b>CHARACTER_MAXIMUM_LENGTH</b>, <b>ORDINAL_POSITION</b> (the column's position from the left), and <b>IS_NULLABLE</b>.</p>
     <div class="code-card"><pre><code><span class="cm">-- (3) All columns of one table, in table order</span>
@@ -167,9 +190,9 @@ ORDER BY TABLE_NAME;</code></pre></div>
   </div>
 </section>
 
-<section>
+<section id="map-search">
   <div class="wrap">
-    <div class="section-title">The mapping query</div>
+    <div class="section-title">Step 5 - The mapping query</div>
     <h2 class="section-head">Find where any piece of data lives — or trace it back</h2>
     <p>This is the basic format to work with. Change the <b>WHERE</b> clause and it answers almost every mapping question. Starting with a known column name, find every table that carries it:</p>
     <div class="code-card"><pre><code><span class="cm">-- Given a column name → which tables have it?</span>
@@ -200,9 +223,23 @@ ORDER BY TABLE_NAME;</code></pre></div>
   </div>
 </section>
 
-<section>
+<section id="map-lineage">
   <div class="wrap">
-    <div class="section-title">Production relationship gate</div>
+    <div class="section-title">Step 6 - NPR element trace</div>
+    <h2 class="section-head">The remaining evidence gap</h2>
+    <p>MEDITECH's guide uses <span class="code-chip">SysDrColumns.NprDpm</span>, <span class="code-chip">NprSegment</span> and <span class="code-chip">NprElement</span> to trace a SQL column back to its source. Those fields are not present in the supplied AKU catalog, so this site cannot validate backward NPR lineage on its own.</p>
+    <ul class="guide-list">
+      <li>Use <b>Shift+F9</b> on the MEDITECH field to capture its NPR DPM, segment and element.</li>
+      <li>Use MEDITECH <b>Table Inquiry</b> or <b>Field Inquiry</b> when available to resolve the corresponding SQL table and column.</li>
+      <li>For production-grade lineage, request a read-only export of TableID, Application and Keylevel plus TableID, Name, SortKey, NprDpm, NprSegment, NprElement and ColumnPosition from an authorized TEST or LIVE Data Repository that has the native mapping layer.</li>
+      <li>Until that evidence is imported, label mappings as <b>schema-confirmed</b>, <b>procedure-confirmed</b> or <b>inferred</b>; never label them NPR-confirmed.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="map-link">
+  <div class="wrap">
+    <div class="section-title">Step 7 - Production relationship gate</div>
     <h2 class="section-head">Validate a candidate join before using it in an SP</h2>
     <p>This example checks the visit-grained infusion source against the encounter spine. A production-ready relationship should return zero orphan rows, zero rows attached to a duplicated parent key, and a maximum of one parent match.</p>
     <div class="code-card"><pre><code><span class="cm">-- Validate PcsMarAct_MarLastDocumented -> AdmVisits</span>
@@ -229,23 +266,11 @@ LEFT JOIN ParentKey p
   </div>
 </section>
 
-<section>
-  <div class="wrap">
-    <div class="section-title">NPR element trace</div>
-    <h2 class="section-head">The remaining evidence gap</h2>
-    <p>MEDITECH's guide uses <span class="code-chip">SysDrColumns.NprDpm</span>, <span class="code-chip">NprSegment</span> and <span class="code-chip">NprElement</span> to trace a SQL column back to its source. Those fields are not present in the supplied AKU catalog, so this site cannot validate backward NPR lineage on its own.</p>
-    <ul class="guide-list">
-      <li>Use <b>Shift+F9</b> on the MEDITECH field to capture its NPR DPM, segment and element.</li>
-      <li>Use MEDITECH <b>Table Inquiry</b> or <b>Field Inquiry</b> when available to resolve the corresponding SQL table and column.</li>
-      <li>For production-grade lineage, request a read-only export of TableID, Application and Keylevel plus TableID, Name, SortKey, NprDpm, NprSegment, NprElement and ColumnPosition from an authorized TEST or LIVE Data Repository that has the native mapping layer.</li>
-      <li>Until that evidence is imported, label mappings as <b>schema-confirmed</b>, <b>procedure-confirmed</b> or <b>inferred</b>; never label them NPR-confirmed.</li>
-    </ul>
-  </div>
-</section>
 
-<section>
+
+<section id="map-operationalize">
   <div class="wrap">
-    <div class="section-title">Online data model</div>
+    <div class="section-title">Step 8 - Online data model</div>
     <h2 class="section-head">How the tables link together</h2>
     <p>MEDITECH's online Data Model shows documented reporting joins. This site is a curated AKU working model generated from the supplied schema and FCAP1A build procedures; it complements, but does not replace, MEDITECH's authoritative model:</p>
     <div class="actions" style="margin-top:18px">

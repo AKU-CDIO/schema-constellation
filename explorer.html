@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AKU CDIO MAYO · Meditech Star Schema Explorer</title>
-<link rel="stylesheet" href="assets/site.css?v=77">
+<link rel="stylesheet" href="assets/site.css?v=78">
 <link rel="stylesheet" href="assets/account.css?v=2">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <meta name="description" content="Interactive star-schema constellation of the AKU Meditech EMR: click a table to see its neighbours, join keys (patient vs visit grain) and relationships, with a VisitID-only filter.">
@@ -180,7 +180,7 @@
 
   /* ---------- DETAIL PANEL ---------- */
   .detail{
-    position:absolute;top:0;right:0;bottom:0;width:452px;
+    position:absolute;top:0;right:0;bottom:0;width:520px;
     background:rgba(255,255,255,.97);backdrop-filter:blur(16px);
     border-left:1px solid var(--line);z-index:25;display:flex;flex-direction:column;
     transform:translateX(0);transition:transform .28s cubic-bezier(.4,0,.2,1);
@@ -268,6 +268,8 @@
   .edge.kv{stroke:#e8860c}
   .edge.ko{stroke:#64748b}
   .edge.hubedge{stroke-width:1.7;stroke-dasharray:5 4}
+  .edge.association{stroke:#e11d48;stroke-width:1.4;stroke-dasharray:3 5;opacity:.72}
+  .edgelabel.association{fill:#be123c}
   .edge.sel{opacity:1;stroke-width:1.9;filter:drop-shadow(0 0 6px rgba(47,107,255,.8))}
   .edge.dim{opacity:.06}
   .edgelabel{font-family:var(--mono);font-weight:700;fill:#33415c;letter-spacing:.3px;
@@ -335,6 +337,12 @@
   }
 </style>
 <script src="assets/account.js?v=2" defer></script>
+  <style>
+  .sp-source{border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:8px;overflow:hidden}
+  .sp-source summary{cursor:pointer;padding:10px 12px;font:700 12px var(--mono);color:var(--txt);background:#f8fafd}
+  .sp-source .sqlbox{margin:0;border:0;border-top:1px solid var(--line);border-radius:0;max-height:560px}
+  .topic-contract .sqlbox pre{word-break:normal;overflow-wrap:normal}
+  </style>
 </head>
 <body>
 <div id="app">
@@ -399,10 +407,12 @@
 
 <script src="data/schema.js?v=6"></script>
 <script src="data/phases.js?v=5"></script>
+<script src="data/sp_source.js?v=2"></script>
 <script>
 "use strict";
 const DATA = window.SCHEMA_DATA || {};
 const PHDATA = window.SCHEMA_PHASES || {};
+const SPSOURCE = window.SP_SOURCE || {assets:{},topics:{}};
 const $ = (s, r=document) => r.querySelector(s);
 
 /* ============================= Data Topic Availability.docx =============================
@@ -470,9 +480,10 @@ function spPlanOfPh(item){
   const members = item.tables.map(n => DATA.tables[n]).filter(Boolean)
     .sort((a, b) => (SP_ZONE_ORDER.indexOf(a.zone) - SP_ZONE_ORDER.indexOf(b.zone)) || a.name.localeCompare(b.name));
   if (!members.length) return null;
-  const internal = DATA.rels.filter(r => r.kind === "join" && r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
+  const context = (SPSOURCE.topics || {})[item.id] || {ids:members.map(x=>x.name),relationships:[],query:"-- Topic assembly query is not available."};
+  const internal = (context.relationships || []).filter(r => r.kind === "join" && r.from !== r.to);
   const anchor = (members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
-  return { item, members, internal, anchor, out: item.sp.out, plan: phPlanName(item), proc: phProcName(item) };
+  return { item, members, internal, context, anchor, out: item.sp.out, plan: phPlanName(item), proc: phProcName(item) };
 }
 
 function spValSql(p){
@@ -523,35 +534,46 @@ function spValSql(p){
 function spSectionHTML(p){
   const color = p.item.color || "#2f6bff";
   const vis = p.members.filter(hasVisitID);
-  const joins = p.internal.length
-    ? p.internal.map(r => `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl" style="font-size:11.5px">${esc(r.from)}</span><span class="qs-arr">→</span><span class="qs-tbl" style="font-size:11.5px">${esc(r.to)}</span><span class="qs-on">on ${esc(r.on)} · ${esc(r.card)}</span></div>`).join("")
-    : `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl">hub star</span><span class="qs-on">all tables → ${esc(p.anchor)} on SourceID + PatientID</span></div>`;
-  const spine = vis.length ? `
-    <div class="sec" style="margin-top:14px"><h3>Visit / encounter spine</h3>
-      <div class="qstep" style="padding:7px 10px"><span class="qs-tbl">AdmVisits</span><span class="qs-arr">⇄</span><span class="qs-tbl">RegAcct_Main</span><span class="qs-on">on SourceID + VisitID · 1:1 encounter spine</span></div>
-      ${vis.map(t => { const s = spineOf(t.name); return `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl">${esc(s)}</span><span class="qs-arr">→</span><span class="qs-tbl">${esc(t.name)}</span><span class="qs-on">on SourceID + VisitID · 1:N</span></div>`; }).join("")}
-    </div>` : "";
+  const context = p.context || {};
+  const joinRels = (context.relationships || []).filter(r => r.kind === "join");
+  const unresolved = (context.relationships || []).filter(r => r.kind === "association");
+  const joins = joinRels.length
+    ? joinRels.map(r => `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl" style="font-size:11.5px">${esc(r.from)}</span><span class="qs-arr">-&gt;</span><span class="qs-tbl" style="font-size:11.5px">${esc(r.to)}</span><span class="qs-on">on ${esc(r.on)} | ${esc(r.card)} | ${esc(r.evidence || "curated")}</span></div>`).join("")
+    : `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl">No validated join</span><span class="qs-on">review source evidence before production use</span></div>`;
+  const sourceAssets = ((p.item.sp && p.item.sp.assets) || []).map(id => (SPSOURCE.assets || {})[id]).filter(Boolean);
+  const procedures = sourceAssets.length
+    ? sourceAssets.map((asset, index) => `<details class="sp-source" ${index === 0 ? "open" : ""}>
+        <summary>${index === 0 ? "Stored procedure" : "Supporting procedure"} - ${esc(asset.name)}</summary>
+        <div class="sqlbox"><pre>${esc(asset.sql)}</pre></div>
+      </details>`).join("")
+    : `<div class="notable">The stored-procedure source asset is not available in this release.</div>`;
   const tables = p.members.map(t => `<span class="chip" style="background:${color}1f;border-color:${color}55;color:${color};cursor:pointer" data-sptbl="${esc(t.name)}">${esc(t.name)}</span>`).join(" ");
   return `
-    <div class="sec" style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
+    <div class="sec topic-contract" style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
       <h3 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span>SP Generation Plan</span>
+        <span>Topic build contract</span>
         <span class="chip" style="background:${color}1a;border-color:${color}55;color:${color}">${esc(p.plan)}</span>
         <span class="chip ${p.item.sp.status === "implemented" ? "pk" : "ext"}">${esc((p.item.sp.status || "blueprint").toUpperCase())}</span>
       </h3>
-      <div class="dl" style="margin-top:6px">Output: <b>CDIO_MeditechDB.dbo.${esc(p.out)}</b> · ${p.members.length} source tables</div>
+      <div class="dl" style="margin-top:6px">Output: <b>CDIO_MeditechDB.dbo.${esc(p.out)}</b> | ${p.members.length} source tables | Author: <b>test</b></div>
       <div class="sqlbox" style="margin-top:10px"><div style="display:flex;flex-wrap:wrap;gap:5px">${tables}</div></div>
-      <div class="sec" style="margin-top:14px"><h3>Join plan · ${esc(p.item.t)}</h3>${joins}</div>
-      ${spine}
-      <div class="sec" style="margin-top:14px"><h3>Quick validation · generated SQL</h3>
+      <div class="sec" style="margin-top:14px"><h3>Join evidence - ${esc(p.item.t)}</h3>${joins}
+        ${unresolved.length ? `<div class="notable" style="margin-top:8px">${unresolved.length} dashed topic association(s) have no validated SQL join key and are deliberately excluded from the assembly query.</div>` : ""}
+      </div>
+      <div class="sec" style="margin-top:14px"><h3>Topic assembly query</h3>
+        <div class="badges" style="margin:0 0 8px"><span class="chip pk">read only</span><span class="chip ext">${joinRels.length} evidence-backed links</span></div>
+        <div class="sqlbox"><pre>${esc(context.query || "-- Topic assembly query is not available.")}</pre></div>
+      </div>
+      <div class="sec" style="margin-top:14px"><h3>Stored procedure</h3>${procedures}</div>
+      <div class="sec" style="margin-top:14px"><h3>Validation query</h3>
         <div class="badges" style="margin:0 0 8px">
           <span class="chip pk">${p.members.length} sources</span>
           <span class="chip ext">${vis.length} visit-grained</span>
-          <span class="chip ext">${p.internal.length} explicit joins</span>
+          <span class="chip ext">${joinRels.length} visible joins</span>
         </div>
         <div class="sqlbox"><pre>${esc(spValSql(p))}</pre></div>
       </div>
-      <a class="focusbtn" href="sps.html#topic-${esc(p.item.id)}" style="text-decoration:none;display:inline-block;margin-top:10px">Open full SP workspace →</a>
+      <a class="focusbtn" href="sps.html#topic-${esc(p.item.id)}" style="text-decoration:none;display:inline-block;margin-top:10px">Open full SP workspace &rarr;</a>
     </div>`;
 }
 
@@ -659,11 +681,35 @@ DATA.rels.forEach(r => {
   (relByTo[r.to] = relByTo[r.to] || []).push(r);
 });
 function showAllLinks(){ const el = document.getElementById("allLinks"); return !!(el && el.checked); }
-function relationshipVisible(r){ return r.kind === "join" && (r.graph !== false || showAllLinks()); }
+function contextForTopicId(id){ return (SPSOURCE.topics || {})[id] || {ids:[],relationships:[]}; }
+function currentTopicContexts(){
+  if (state.mode === "doc"){
+    const item = PH_TOPICS.find(t => t.t === state.docName);
+    return item ? [contextForTopicId(item.id)] : [];
+  }
+  if (state.mode === "topic" && state.topicId){
+    return PH_TOPICS.filter(t => t.cat === state.topicId).map(t => contextForTopicId(t.id));
+  }
+  return [];
+}
+function activeRelationships(){
+  const context = currentTopicContexts().flatMap(item => item.relationships || []);
+  return context.concat(DATA.rels || []);
+}
+function activeContextIds(){ return new Set(currentTopicContexts().flatMap(item => item.ids || [])); }
+function relationshipVisible(r){
+  if (r.kind === "association") return state.mode === "doc" || state.mode === "topic";
+  if (r.kind !== "join") return false;
+  if (state.mode === "doc" || state.mode === "topic") return true;
+  return r.graph !== false || showAllLinks();
+}
 function neighbors(id, includeHidden=showAllLinks()){
   const set = new Set();
-  (relByFrom[id] || []).forEach(r => { if (r.kind === "join" && (includeHidden || r.graph !== false)) set.add(r.to); });
-  (relByTo[id] || []).forEach(r => { if (r.kind === "join" && (includeHidden || r.graph !== false)) set.add(r.from); });
+  activeRelationships().forEach(r => {
+    if (r.kind !== "join" || (!includeHidden && r.graph === false)) return;
+    if (r.from === id) set.add(r.to);
+    if (r.to === id) set.add(r.from);
+  });
   return set;
 }
 
@@ -859,12 +905,13 @@ function visibleIds(){
       (!populatedOnly || !isSource(n) || isPopulated(n) || n === state.focusTable)));
   if (state.mode === "overview") return filt(new Set(Object.keys(DATA.tables).filter(isSource)));
   if (state.mode === "doc"){
-    const ds = new Set([...(state.docIds || [])].filter(isSource));
+    const ds = new Set([...(state.docIds || []), ...activeContextIds()].filter(isSource));
     ds.add("HimRec_Main");
     return filt(ds);
   }
   if (state.mode === "topic"){
     const s = new Set(Object.keys(DATA.tables).filter(n => isSource(n) && DATA.tables[n].topic === state.topicId));
+    activeContextIds().forEach(n => { if (isSource(n)) s.add(n); });
     (window.__linkedIds || []).forEach(n => { if (isSource(n)) s.add(n); });
     return filt(s);
   }
@@ -908,7 +955,7 @@ function render(){
   const drawn = new Set();
   const isHub = id => id === "HimRec_Main";
 
-  DATA.rels.forEach(r => {
+  activeRelationships().forEach(r => {
     const a = r.from, b = r.to;
     if (!isSource(a) || !isSource(b)) return;
     if (!relationshipVisible(r)) return;
@@ -927,12 +974,13 @@ function render(){
     const nrm = Math.hypot(dx, dy) || 1;
     const cx = midx - (dy / nrm) * bend, cy = midy + (dx / nrm) * bend;
     path.setAttribute("d", `M ${pa.x} ${pa.y} Q ${cx} ${cy} ${pb.x} ${pb.y}`);
-    path.setAttribute("class", "edge " + (isHubEdge ? "kp hubedge" : keyFamily(r.on)));
-    if (isHubEdge) path.setAttribute("stroke-width", "1.6");
+    const isAssociation = r.kind === "association";
+    path.setAttribute("class", "edge " + (isAssociation ? "association" : (isHubEdge ? "kp hubedge" : keyFamily(r.on))));
+    if (isHubEdge && !isAssociation) path.setAttribute("stroke-width", "1.6");
     path.setAttribute("data-a", a); path.setAttribute("data-b", b);
     path.setAttribute("data-card", r.card);
     path.setAttribute("data-on", r.on);
-    if (!isHubEdge) path.setAttribute("marker-end", "url(#arrow)");
+    if (!isHubEdge && !isAssociation) path.setAttribute("marker-end", "url(#arrow)");
     root.appendChild(path);
 
     /* join-key initials on the line (focused views only): PI, VI, DI …
@@ -944,11 +992,11 @@ function render(){
       lbl.setAttribute("x", midx);
       lbl.setAttribute("y", midy - 3);
       lbl.setAttribute("text-anchor", "middle");
-      lbl.setAttribute("class", "edgelabel " + (isHubEdge ? "kp" : keyFamily(r.on)));
+      lbl.setAttribute("class", "edgelabel " + (isAssociation ? "association" : (isHubEdge ? "kp" : keyFamily(r.on))));
       lbl.setAttribute("font-size", Math.max(9, Math.round(cf.font * 0.52)));
       lbl.setAttribute("data-a", a); lbl.setAttribute("data-b", b);
       lbl.setAttribute("data-on", r.on);
-      lbl.textContent = keyAbbr(r.on);
+      lbl.textContent = isAssociation ? "TOPIC" : keyAbbr(r.on);
       root.appendChild(lbl);
     }
   });
@@ -1228,7 +1276,7 @@ function showTip(e, key, kind){
        ${key === "HimRec_Main" ? `<div class="tj">universal join key: PatientID (+SourceID)</div>` : ""}`;
   } else {
     const [a, b] = key.split("|");
-    let r = DATA.rels.find(r => (r.from === a && r.to === b) || (r.from === b && r.to === a));
+    let r = activeRelationships().find(r => (r.from === a && r.to === b) || (r.from === b && r.to === a));
     if (!r) r = { card: "1:N", on: "PatientID", note: "" };
     const dir = r.from === a ? `${a} → ${b}` : `${b} → ${a}`;
     const onTxt = String(r.on || "PatientID");
@@ -1270,7 +1318,7 @@ function joinPath(from, to){
 }
 
 function relBetween(a, b){
-  return DATA.rels.find(r => r.kind === "join" && ((r.from === a && r.to === b) || (r.from === b && r.to === a)));
+  return activeRelationships().find(r => r.kind === "join" && ((r.from === a && r.to === b) || (r.from === b && r.to === a)));
 }
 
 function joinNarrative(r, name){
@@ -1333,7 +1381,7 @@ function renderDetail(name, viaTopic){
 
   /* relationships with narrative */
   let relRows = "";
-  DATA.rels.forEach(r => {
+  activeRelationships().forEach(r => {
     if (r.from !== name && r.to !== name) return;
     const other = r.from === name ? r.to : r.from;
     if (!DATA.tables[other]) return;
@@ -1481,7 +1529,6 @@ function renderDocTopic(t){
     </div>
     <div class="detail-body">
       ${curList}
-      <div class="sec"><h3>Validation query</h3><div class="sqlbox"><pre>${esc(query)}</pre></div></div>
       ${graphBtn}
       ${spSections || spNote}
     </div>`;
@@ -1501,7 +1548,8 @@ function renderDocTopic(t){
 function showDocInGraph(t){
   state.docName = t.t;
   const curated = phCurated(t);
-  state.docIds = new Set(curated);
+  const context = contextForTopicId(t.id);
+  state.docIds = new Set([...(context.ids || []), ...curated]);
   setView("doc");
 }
 
