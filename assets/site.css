@@ -274,6 +274,33 @@ footer .right{margin-left:auto;display:flex;gap:16px}
 .guide-list{margin:14px 0 6px;padding-left:1.1rem;display:flex;flex-direction:column;gap:.55rem;font-size:15px;color:var(--muted);line-height:1.6}
 .guide-list li::marker{color:var(--accent)}
 
+html,body{max-width:100%}
+.topic-head>div{min-width:0;flex:1}
+.sp-meta .chip{white-space:normal;overflow-wrap:anywhere}
+.sp-card .k{flex-wrap:wrap}
+.jp{flex-wrap:wrap;min-width:0}
+.jp span,.jp code{overflow-wrap:anywhere;word-break:break-word}
+
+@media(max-width:760px){
+  html,body{overflow-x:hidden}
+  .nav{position:relative;flex-wrap:wrap;padding:10px 12px;max-width:100%}
+  .nav .brand{margin-right:auto;min-width:0}
+  .nav .brand small{display:none}
+  .nav .links{order:3;width:100%;margin-left:0;flex-wrap:nowrap;overflow-x:auto;gap:3px;padding-bottom:3px}
+  .nav .links a{flex:0 0 auto;padding:7px 10px;font-size:13px}
+  .wrap{padding-left:16px;padding-right:16px}
+  section{padding-top:44px;padding-bottom:44px}
+  .pagehead{padding-top:42px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .topic-block{padding:18px}
+  .phase-grid,.sp-plan,.sp-col{min-width:0}
+  .sp-tbl{grid-template-columns:minmax(0,1fr)}
+  .mt-table{display:block;max-width:100%;overflow-x:auto}
+  .code-chip{white-space:normal;overflow-wrap:anywhere}
+  .phase-head .chip,.sql-topic{max-width:100%;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+  .card code{overflow-wrap:anywhere;word-break:break-word}
+}
+
 
 /* Authenticated Google Cloud account */
 .auth-account{position:relative;margin-left:auto;z-index:30}

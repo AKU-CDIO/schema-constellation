@@ -5,6 +5,9 @@ const path = require("node:path");
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 8080);
 const IS_CLOUD_RUN = Boolean(process.env.K_SERVICE);
+const ALLOWED_EMAIL_DOMAIN = String(
+  process.env.AUTH_ALLOWED_EMAIL_DOMAIN || "gcp.cdio.aku.edu"
+).trim().toLowerCase();
 const PUBLIC_FILES = new Set([
   "404.html",
   "explorer.html",
@@ -40,7 +43,12 @@ function getIdentity(request) {
   const email = stripIdentityPrefix(request.headers["x-goog-authenticated-user-email"]);
   const id = stripIdentityPrefix(request.headers["x-goog-authenticated-user-id"]);
 
-  if (email && id) return { email, id };
+  if (email && id) {
+    const normalizedEmail = email.toLowerCase();
+    const allowed = normalizedEmail.endsWith(`@${ALLOWED_EMAIL_DOMAIN}`);
+    if (!IS_CLOUD_RUN || allowed) return { email, id };
+    return null;
+  }
   if (!IS_CLOUD_RUN) {
     return {
       email: process.env.LOCAL_AUTH_EMAIL || "local.developer@aku.edu",
@@ -64,10 +72,15 @@ function setSecurityHeaders(response) {
     "style-src 'self' 'unsafe-inline'",
   ].join("; "));
   response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   response.setHeader("Referrer-Policy", "same-origin");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  if (IS_CLOUD_RUN) {
+    response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
 }
 
 function sendJson(response, statusCode, body) {
@@ -169,6 +182,7 @@ const server = http.createServer((request, response) => {
       email: identity.email,
       id: identity.id,
       provider: IS_CLOUD_RUN ? "Google Cloud IAP" : "Local development",
+      allowed_domain: ALLOWED_EMAIL_DOMAIN,
     });
     return;
   }

@@ -1,5 +1,5 @@
 (() => {
-  const nav = document.querySelector(".nav");
+  const nav = document.querySelector(".nav, #app > header");
   if (!nav) return;
 
   fetch("/auth/session", {

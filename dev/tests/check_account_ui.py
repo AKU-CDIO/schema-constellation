@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PAGES = ["index.html", "explorer.html", "topics.html", "sql.html", "sps.html", "sp-review.html", "404.html"]
+PAGES = ["index.html", "explorer.html", "topics.html", "sql.html", "mapping.html", "sps.html", "sp-review.html", "404.html"]
 
 
 def main() -> None:
@@ -21,8 +21,8 @@ def main() -> None:
 
     for page in PAGES:
         html = (ROOT / page).read_text(encoding="utf-8")
-        assert 'href="assets/account.css?v=1"' in html, page
-        assert 'src="assets/account.js?v=1"' in html, page
+        assert 'href="assets/account.css?v=2"' in html, page
+        assert 'src="assets/account.js?v=2"' in html, page
         assert 'assets/auth.js' not in html, page
 
     print("PASS account UI: avatar, profile management, security, and sign-out")

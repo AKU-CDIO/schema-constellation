@@ -7,6 +7,7 @@ PAGES = [
     "explorer.html",
     "topics.html",
     "sql.html",
+    "mapping.html",
     "sps.html",
     "sp-review.html",
     "404.html",
@@ -28,7 +29,7 @@ def main() -> None:
 
     for page in PAGES:
         html = (ROOT / page).read_text(encoding="utf-8")
-        assert 'src="assets/account.js?v=1"' in html, page
+        assert 'src="assets/account.js?v=2"' in html, page
 
     print("PASS auth integration: IAP headers, session UI, protected server, and all pages")
 

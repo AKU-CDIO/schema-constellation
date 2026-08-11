@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Data Topics · Phase 1-5 · AKU CDIO MAYO</title>
-<link rel="stylesheet" href="assets/site.css?v=75">
-<link rel="stylesheet" href="assets/account.css?v=1">
+<link rel="stylesheet" href="assets/site.css?v=77">
+<link rel="stylesheet" href="assets/account.css?v=2">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <meta name="description" content="All AKU Meditech EMR data topics organised by Phase 1-5: core clinical data, operational & ancillary, imaging & diagnostics, specialty & longitudinal, and extended & future — each with source tables, join plan, visit/encounter spine, and FCAP1A stored-procedure validation SQL.">
 <meta property="og:type" content="website">
@@ -14,7 +14,7 @@
 <meta property="og:description" content="All AKU Meditech EMR data topics organised by Phase 1-5, each with source tables, join plan, visit/encounter spine and FCAP1A stored-procedure validation SQL.">
 <meta property="og:url" content="https://schema-constellation-864230826730.us-central1.run.app/topics.html">
 <meta name="twitter:card" content="summary">
-<script src="assets/account.js?v=1" defer></script>
+<script src="assets/account.js?v=2" defer></script>
 </head>
 <body>
 <nav class="nav">
@@ -82,6 +82,11 @@ const dbOf = n => tableOf(n).db || (n === "AdmVisits" ? "AKULivendb" : "AKULiveA
 const fq = n => `[${dbOf(n)}].[dbo].[${n}]`;
 const hasVisitID = t => hasCol(t, "VisitID");
 const hasPatientID = t => hasCol(t, "PatientID");
+const rowBadge = t => {
+  if (t.row_count == null) return `<span class="chip row-badge" style="color:var(--faint)">row count unknown</span>`;
+  const tone = t.row_quality === "usable" ? "var(--good)" : t.row_quality === "empty" ? "var(--bad)" : "var(--warn)";
+  return `<span class="chip row-badge" style="color:${tone}">${Number(t.row_count).toLocaleString()} rows · ${esc(t.row_quality || "unknown")}</span>`;
+};
 const spineOf = n => /^(RegAcct_|PcsAcct|OmOrd|Pth|ItsResult|EmrAcctRep|BarAcct|SurCase|CwsAppt)/.test(n) ? "RegAcct_Main" : "AdmVisits";
 const outFull = t => t.sp.out;
 const domOf = t => outFull(t).replace("tbl_FCAP1A_", "").replace("_Extended", "").replace("_Merged", "");
@@ -213,7 +218,7 @@ function topicBlock(ph, t, tables, rels){
     <div class="sp-card">
       <div class="n"><a href="explorer.html#tbl=${encodeURIComponent(m.name)}">${esc(m.name)}</a></div>
       <div class="l">${esc(m.label || m.desc || "")}</div>
-      <div class="k"><span class="chip" style="color:${color}">${ZONE[m.zone] || (m.zone || "").toUpperCase()}</span>${hasVisitID(m) ? `<span class="chip" style="color:var(--warn)">VisitID</span>` : ""}<span>${m.cols.length} cols</span></div>
+      <div class="k"><span class="chip" style="color:${color}">${ZONE[m.zone] || (m.zone || "").toUpperCase()}</span>${hasVisitID(m) ? `<span class="chip" style="color:var(--warn)">VisitID</span>` : ""}${rowBadge(m)}<span>${m.cols.length} cols</span></div>
     </div>`).join("");
   const joins = internal.length
     ? internal.map(r => `
@@ -279,8 +284,8 @@ function topicBlock(ph, t, tables, rels){
 }
 
 Promise.all([
-  fetch("data/schema.js?v=5").then(r => r.text()),
-  fetch("data/phases.js?v=3").then(r => r.text()),
+  fetch("data/schema.js?v=6").then(r => r.text()),
+  fetch("data/phases.js?v=5").then(r => r.text()),
 ]).then(([s, p]) => {
   const m = s.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
   const pm = p.match(/window\.SCHEMA_PHASES\s*=\s*(\{.*\});/s);

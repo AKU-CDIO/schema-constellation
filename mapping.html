@@ -4,16 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Keys to Data Mapping · AKU CDIO MAYO</title>
-<link rel="stylesheet" href="assets/site.css?v=7">
+<link rel="stylesheet" href="assets/site.css?v=77">
+<link rel="stylesheet" href="assets/account.css?v=2">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-<meta name="description" content="How to navigate the AKU Meditech Data Repository (AKULiveATdb): the catalog tables that map your data, key levels, and the query patterns to find any table or column.">
+<meta name="description" content="Validated structural mapping for the AKU Meditech Data Repository: catalog inventory, candidate grain, evidence limits, and production relationship checks.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AKU CDIO MAYO · Schema Constellation">
 <meta property="og:title" content="Keys to Data Mapping · AKU CDIO MAYO">
-<meta property="og:description" content="How to navigate the AKU Meditech Data Repository: catalog tables, key levels, and query patterns to find any table or column.">
+<meta property="og:description" content="Validated structural mapping for the AKU Meditech Data Repository, with candidate grain and explicit evidence limits.">
 <meta property="og:url" content="https://schema-constellation-864230826730.us-central1.run.app/mapping.html">
 <meta name="twitter:card" content="summary">
-<script src="assets/auth.js?v=1" defer></script>
+<script src="assets/account.js?v=2" defer></script>
 </head>
 <body>
 <nav class="nav">
@@ -36,44 +37,61 @@
   <div class="wrap">
     <div class="section-title">Data Mapping Guide</div>
     <h1>Keys to Data Mapping</h1>
-    <p class="lead">The AKU Meditech Data Repository exposes your EMR data in a SQL database — <span class="code-chip">AKULiveATdb.dbo</span> — with more than 17,000 tables and 143,000 columns. This guide shows you the catalog views that map where each piece of data lives, how to read a table's <em>key level</em>, and the query patterns to pinpoint any table or column — the same way MEDITECH's <span class="code-chip">SysDrTables</span> / <span class="code-chip">SysDrColumns</span> work in a native Data Repository.</p>
+    <p class="lead">The AKU Meditech Data Repository exposes EMR data in <span class="code-chip">AKULiveATdb.dbo</span>, with 17,094 base tables and 143,082 base-table columns. This guide follows MEDITECH's documented data-mapping workflow while being explicit about the evidence available here: the AKU extract contains <b>no SysDrTables or SysDrColumns</b>, so structural discovery is supported, but official NPR lineage and official MEDITECH key levels cannot be reconstructed from this extract alone.</p>
   </div>
 </header>
 
 <section>
   <div class="wrap">
-    <div class="section-title">SQL Tables for Data Mapping</div>
-    <h2 class="section-head">The catalogs that tell you what exists</h2>
-    <p>Every SQL Server database exposes <b>system catalog views</b> that describe the database itself — they contain no hospital data, only structure. These are your mapping tables. Two matter most:</p>
+    <div class="section-title">Validated for the AKU extract</div>
+    <h2 class="section-head">Structural mapping is feasible; source lineage is only partial</h2>
+    <p>The supplied <span class="code-chip">Information_Schema_column_row_counts.csv</span> was checked against the site model. It contains 17,095 catalog objects: 17,094 base-table inventories plus one reporting view whose row count is unknown. The 143,082 base-column total reconciles exactly with the site catalog. This evidence can prove names, types, positions, nullability and row-count bands; it cannot prove primary keys, NPR DPM/segment/element lineage, feeder application, or a join's correctness.</p>
+    <div class="stats" style="margin-top:22px">
+      <div class="stat"><b>17,094</b><span>base tables</span></div>
+      <div class="stat"><b>143,082</b><span>base columns</span></div>
+      <div class="stat"><b>3,150</b><span>usable tables</span></div>
+      <div class="stat"><b>4,734</b><span>1-999 rows</span></div>
+      <div class="stat"><b>9,210</b><span>zero rows</span></div>
+      <div class="stat"><b>1</b><span>view count unknown</span></div>
+    </div>
+    <p class="section-sub"><b>Production rule:</b> the Explorer shows sources with at least 1,000 rows by default. Unknown row counts remain visible; zero-row and 1-999-row sources are excluded from the default graph but remain searchable and auditable. Neither volume nor matching column names prove a relationship.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-title">Available mapping evidence</div>
+    <h2 class="section-head">SQL catalogs describe structure, not MEDITECH lineage</h2>
+    <p>SQL Server's system catalog views contain database structure rather than hospital records. They provide a dependable inventory for this site, but they are <b>not equivalents</b> of MEDITECH's missing mapping tables:</p>
     <div class="phase-grid">
       <div class="topic-card">
-        <div class="tc-top"><span style="width:10px;height:10px;border-radius:50%;background:#2f6bff;flex:none"></span><b class="tc-name">INFORMATION_SCHEMA.TABLES</b><span class="tc-badge">table catalog</span></div>
-        <div class="t-note">One row per table — the equivalent of MEDITECH's <b>SysDrTables</b>. Run it in <code>AKULiveATdb</code> and every row is a table you can report from.</div>
+        <div class="tc-top"><span style="width:10px;height:10px;border-radius:50%;background:#2f6bff;flex:none"></span><b class="tc-name">INFORMATION_SCHEMA.TABLES</b><span class="tc-badge">available</span></div>
+        <div class="t-note">One row per catalog object. It proves the table or view name, schema and object type. It does not include MEDITECH TableID, Application or Keylevel.</div>
       </div>
       <div class="topic-card">
-        <div class="tc-top"><span style="width:10px;height:10px;border-radius:50%;background:#059669;flex:none"></span><b class="tc-name">INFORMATION_SCHEMA.COLUMNS</b><span class="tc-badge">column catalog</span></div>
-        <div class="t-note">One row per column — the equivalent of MEDITECH's <b>SysDrColumns</b>. Name, SQL data type, max length, position and nullability for all 143,082 columns.</div>
+        <div class="tc-top"><span style="width:10px;height:10px;border-radius:50%;background:#059669;flex:none"></span><b class="tc-name">INFORMATION_SCHEMA.COLUMNS</b><span class="tc-badge">available</span></div>
+        <div class="t-note">One row per column. It proves the SQL name, data type, length, position and nullability. It does not include SortKey, NprDpm, NprSegment or NprElement.</div>
+      </div>
+      <div class="topic-card">
+        <div class="tc-top"><span style="width:10px;height:10px;border-radius:50%;background:#e11d48;flex:none"></span><b class="tc-name">SysDrTables / SysDrColumns</b><span class="tc-badge">not present</span></div>
+        <div class="t-note">Confirmed absent from the supplied AKU schema. Therefore official key levels and backward NPR lineage are intentionally not claimed anywhere on this site.</div>
       </div>
     </div>
-    <p>In a MEDITECH-native Data Repository these same concepts are pre-built as <span class="code-chip">SysDrTables</span> and <span class="code-chip">SysDrColumns</span>. Check whether they exist in this database:</p>
-    <div class="code-card"><pre><code><span class="cm">-- Does the native MEDITECH mapping layer exist here?</span>
-<span class="fn">SELECT</span> TABLE_NAME <span class="fn">FROM</span> INFORMATION_SCHEMA.TABLES
- <span class="fn">WHERE</span> TABLE_NAME <span class="fn">LIKE</span> <span class="st">'SysDr%'</span>;</code></pre></div>
-    <p>If it returns rows, you can run MEDITECH's <b>SysDrTables</b>/<b>SysDrColumns</b> queries verbatim. If it returns nothing (as in the schema dump this site is generated from), the queries below give you the identical capability against the SQL Server catalogs.</p>
+    <p class="section-sub">Method reference: MEDITECH's <a href="https://home.meditech.com/en/d/clientservicesccimages/otherfiles/2013marchnewsletterdatamapping.pdf" target="_blank" rel="noopener noreferrer"><b>Keys to Data Repository Data Mapping</b></a>. The guide documents the fields available when SysDr tables exist; this AKU implementation uses only the subset supported by the supplied schema and stored procedures.</p>
   </div>
 </section>
 
 <section>
   <div class="wrap">
     <div class="section-title">Table catalog</div>
-    <h2 class="section-head">Every table you can query, with its key level</h2>
-    <p>The columns to note in the table catalog: <b>TABLE_NAME</b> (the MEDITECH mnemonic — e.g. <span class="code-chip">EmrPat_Allergies</span>), <b>TABLE_CATALOG</b> (the database — always <span class="code-chip">AKULiveATdb</span> here), <b>TABLE_SCHEMA</b> (<span class="code-chip">dbo</span>), and the <b>key level</b> you derive from the key columns present.</p>
+    <h2 class="section-head">Every table you can query, with a candidate grain</h2>
+    <p>The available catalog fields are <b>TABLE_NAME</b> (for example <span class="code-chip">EmrPat_Allergies</span>), <b>TABLE_CATALOG</b> (<span class="code-chip">AKULiveATdb</span> here), <b>TABLE_SCHEMA</b> (<span class="code-chip">dbo</span>) and <b>TABLE_TYPE</b>. Candidate row grain is inferred separately from marker-column presence and must not be presented as MEDITECH's official Keylevel.</p>
     <div class="code-card"><pre><code><span class="cm">-- (1) The complete list of tables available for reporting</span>
 <span class="fn">SELECT</span> DISTINCT TABLE_NAME
 <span class="fn">FROM</span> AKULiveATdb.INFORMATION_SCHEMA.TABLES
 <span class="fn">WHERE</span> TABLE_TYPE = <span class="st">'BASE TABLE'</span>
 <span class="fn">ORDER BY</span> TABLE_NAME;</code></pre></div>
-    <p>The first letters of a table name tell you the <b>feeder application</b> — the MEDITECH module that populates it:</p>
+    <p>Table-name prefixes can help narrow a search and often suggest a MEDITECH module, but without <span class="code-chip">SysDrTables.Application</span> they are naming heuristics, not authoritative feeder-application metadata:</p>
     <div class="code-card"><pre><code><span class="cm">-- Prefix = feeder application</span>
 <span class="fn">SELECT</span> TABLE_NAME <span class="fn">FROM</span> INFORMATION_SCHEMA.TABLES
  <span class="fn">WHERE</span> TABLE_NAME <span class="fn">LIKE</span> <span class="st">'Bar%'</span>;   <span class="cm">-- Bar = Billing / AR (claims, insurance)</span>
@@ -86,27 +104,52 @@
 <span class="fn">SELECT</span> TABLE_NAME <span class="fn">FROM</span> INFORMATION_SCHEMA.TABLES
  <span class="fn">WHERE</span> TABLE_NAME <span class="fn">LIKE</span> <span class="st">'RegAcct%'</span>; <span class="cm">-- Reg = registration / accounts</span></code></pre></div>
 
-    <div class="section-title" style="margin-top:2.4rem">Key levels</div>
-    <h2 class="section-head">What kind of rows a table holds</h2>
-    <p>Every MEDITECH table belongs to a <b>key level</b> that says what its rows describe and which keys identify them. This is derived from the key columns present in the table. The counts below are real, computed from the AKU schema dump:</p>
+    <div class="section-title" style="margin-top:2.4rem">Candidate grain</div>
+    <h2 class="section-head">What marker columns suggest - and what they do not prove</h2>
+    <p>Because official Keylevel and SortKey metadata are unavailable, the site assigns a <b>candidate grain family</b> only from the presence of PatientID, VisitID and SourceID. The question marks are deliberate: these labels do not distinguish primary keys from foreign keys or singular from repeating rows. The counts reconcile to all 17,094 base tables:</p>
     <table class="mt-table">
-      <thead><tr><th>Key level</th><th>Meaning</th><th>Key columns</th><th>Count</th><th>Example</th></tr></thead>
+      <thead><tr><th>Candidate grain</th><th>Meaning</th><th>Marker columns</th><th>Count</th><th>Example</th></tr></thead>
       <tbody>
-        <tr><td><b>PS</b></td><td>Patient-specific, singular — PatientID is the patient key</td><td>PatientID</td><td>609</td><td>HimRec_Data</td></tr>
-        <tr><td><b>PV</b></td><td>Patient + visit — both PatientID and VisitID in the key</td><td>PatientID, VisitID</td><td>57</td><td>HimRec_Main</td></tr>
-        <tr><td><b>V</b></td><td>Visit-specific — VisitID is the visit key</td><td>VisitID</td><td>1,153</td><td>AbsAcct_Diagnoses</td></tr>
-        <tr><td><b>NP</b></td><td>Non-patient — no patient/visit key (reference, config, cross-application)</td><td>SourceID only / none</td><td>15,264</td><td>MisPatProblem_Main</td></tr>
-        <tr><td><b>D</b></td><td>Dictionary / DR system tables — no clinical keys at all</td><td>none</td><td>11</td><td>DR_SysStorageHistory</td></tr>
+        <tr><td><b>P?</b></td><td>Patient marker present; visit marker absent</td><td>PatientID</td><td>609</td><td>HimRec_Data</td></tr>
+        <tr><td><b>PV?</b></td><td>Both patient and visit markers present</td><td>PatientID, VisitID</td><td>57</td><td>HimRec_Main</td></tr>
+        <tr><td><b>V?</b></td><td>Visit marker present; patient marker absent</td><td>VisitID</td><td>1,153</td><td>AbsAcct_Diagnoses</td></tr>
+        <tr><td><b>NP?</b></td><td>No patient or visit marker; purpose remains unclassified</td><td>SourceID only / none</td><td>15,264</td><td>MisPatProblem_Main</td></tr>
+        <tr><td><b>SYS?</b></td><td>DR-prefixed system table with no core marker</td><td>none</td><td>11</td><td>DR_SysStorageHistory</td></tr>
       </tbody>
     </table>
-    <div class="code-card"><pre><code><span class="cm">-- (2) Derive the key level for every table yourself</span>
-<span class="fn">SELECT</span> TABLE_NAME,
-       <span class="fn">MAX</span>(<span class="fn">CASE WHEN</span> COLUMN_NAME=<span class="st">'PatientID'</span> <span class="fn">THEN</span> <span class="fn">1 ELSE 0 END</span>) AS HasPatient,
-       <span class="fn">MAX</span>(<span class="fn">CASE WHEN</span> COLUMN_NAME=<span class="st">'VisitID'</span>   <span class="fn">THEN</span> <span class="fn">1 ELSE 0 END</span>) AS HasVisit,
-       <span class="fn">MAX</span>(<span class="fn">CASE WHEN</span> COLUMN_NAME=<span class="st">'SourceID'</span>  <span class="fn">THEN</span> <span class="fn">1 ELSE 0 END</span>) AS HasSource
-<span class="fn">FROM</span> AKULiveATdb.INFORMATION_SCHEMA.COLUMNS
-<span class="fn">GROUP BY</span> TABLE_NAME;</code></pre></div>
-    <p class="section-sub">Rule of thumb: tables with <b>PatientID</b> hold patient chart data, tables with <b>VisitID</b> (and no PatientID) hold visit/encounter data, and tables with neither are dictionaries or reference data you join on code columns.</p>
+    <div class="code-card"><pre><code><span class="cm">-- (2) Reproduce the detected grain family for every base table</span>
+WITH ColumnFlags AS (
+  SELECT TABLE_NAME,
+         MAX(CASE WHEN COLUMN_NAME='PatientID' THEN 1 ELSE 0 END) AS HasPatient,
+         MAX(CASE WHEN COLUMN_NAME='VisitID'   THEN 1 ELSE 0 END) AS HasVisit,
+         MAX(CASE WHEN COLUMN_NAME='SourceID'  THEN 1 ELSE 0 END) AS HasSource
+  FROM AKULiveATdb.INFORMATION_SCHEMA.COLUMNS
+  GROUP BY TABLE_NAME
+)
+SELECT TABLE_NAME,
+       CASE
+         WHEN TABLE_NAME LIKE 'DR[_]%' AND HasSource=0 AND HasPatient=0 AND HasVisit=0 THEN 'SYS?'
+         WHEN HasPatient=1 AND HasVisit=1 THEN 'PV?'
+         WHEN HasPatient=1 THEN 'P?'
+         WHEN HasVisit=1 THEN 'V?'
+         ELSE 'NP?'
+       END AS CandidateGrain
+FROM ColumnFlags
+ORDER BY TABLE_NAME;</code></pre></div>
+    <p class="section-sub"><b>Interpretation rule:</b> PatientID and VisitID identify candidate grain only. Confirm uniqueness, null rates, orphan rates and join amplification before declaring a production relationship. A table with neither marker is simply unclassified from this evidence; it must not automatically be called a dictionary or non-patient table.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-title">Relationship evidence</div>
+    <h2 class="section-head">Keep observed facts separate from inferred joins</h2>
+    <div class="phase-grid">
+      <div class="topic-card"><div class="tc-top"><b class="tc-name">Schema-confirmed</b><span class="tc-badge">high confidence</span></div><div class="t-note">Table and column existence, SQL type, length, nullability, and the supplied row-count snapshot.</div></div>
+      <div class="topic-card"><div class="tc-top"><b class="tc-name">Procedure-confirmed</b><span class="tc-badge">high confidence</span></div><div class="t-note">A stored procedure actually reads the source, uses the join, and writes the documented FCAP1A output.</div></div>
+      <div class="topic-card"><div class="tc-top"><b class="tc-name">Key-grain inferred</b><span class="tc-badge">validate</span></div><div class="t-note">PatientID, VisitID, naming, or table-family structure suggests a relationship. Run orphan, uniqueness, and amplification checks before production use.</div></div>
+      <div class="topic-card"><div class="tc-top"><b class="tc-name">External / partial</b><span class="tc-badge">source gap</span></div><div class="t-note">The relational catalog proves an order or report reference, but not external images, waveforms, measurements, genomic variants, or media assets.</div></div>
+    </div>
   </div>
 </section>
 
@@ -141,31 +184,61 @@
 <span class="fn">FROM</span> AKULiveATdb.INFORMATION_SCHEMA.COLUMNS c
 <span class="fn">WHERE</span> c.COLUMN_NAME = <span class="st">'Address1'</span>
 <span class="fn">ORDER BY</span> c.TABLE_NAME;</code></pre></div>
-    <p class="section-sub">Real result: <span class="code-chip">Address1</span> appears in <b>34 tables</b> — e.g. <span class="code-chip">BarAcctRefund_SendToAddress</span>, <span class="code-chip">BarAcctRep_Address</span>, <span class="code-chip">BarClaimFormat_Address</span>. The same column name in different tables means the same MEDITECH element flows to several places.</p>
+    <p class="section-sub">Observed result: <span class="code-chip">Address1</span> appears in <b>34 tables</b> - e.g. <span class="code-chip">BarAcctRefund_SendToAddress</span>, <span class="code-chip">BarAcctRep_Address</span>, <span class="code-chip">BarClaimFormat_Address</span>. Repeated names identify candidates to investigate; without NprElement metadata they do not prove that the same MEDITECH element populates every column.</p>
     <p>Or reverse the process — given a table, list its columns; given a column, see the type:</p>
     <div class="code-card"><pre><code><span class="cm">-- Reverse: table → its columns (the Address1 example from the newsletter)</span>
 <span class="fn">SELECT</span> COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH AS MaxLen
 <span class="fn">FROM</span> AKULiveATdb.INFORMATION_SCHEMA.COLUMNS
 <span class="fn">WHERE</span> TABLE_NAME = <span class="st">'AdmVisits'</span>
 <span class="fn">ORDER BY</span> ORDINAL_POSITION;</code></pre></div>
-    <p>And because MEDITECH stores dictionary codes with a suffix, a column ending in a code (e.g. <span class="code-chip">Insurance_MisInsID</span>, <span class="code-chip">FinClass_MisFinClassID</span>) is a foreign key into the matching <span class="code-chip">Mis*</span> dictionary. You can find every table that reads a given dictionary:</p>
+    <p>A dictionary-style suffix (for example <span class="code-chip">Insurance_MisInsID</span> or <span class="code-chip">FinClass_MisFinClassID</span>) is useful evidence for a <em>candidate</em> link to a matching <span class="code-chip">Mis*</span> table. Confirm it with stored-procedure usage and relationship-quality queries before treating it as a foreign key:</p>
     <div class="code-card"><pre><code><span class="cm">-- Which tables read the insurance dictionary (MisIns_Main)?</span>
 <span class="fn">SELECT</span> DISTINCT TABLE_NAME
 <span class="fn">FROM</span> AKULiveATdb.INFORMATION_SCHEMA.COLUMNS
 <span class="fn">WHERE</span> COLUMN_NAME = <span class="st">'Insurance_MisInsID'</span>;</code></pre></div>
-    <p class="section-sub">Real result: <b>77 tables</b> join to the insurance dictionary — claims, authorizations, benefit periods, reimbursement rates, and the curated insurance topics in this explorer.</p>
+    <p class="section-sub">Observed result: <b>77 tables</b> contain the candidate insurance key. That is discovery evidence, not proof that all 77 joins have the same cardinality or business meaning.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-title">Production relationship gate</div>
+    <h2 class="section-head">Validate a candidate join before using it in an SP</h2>
+    <p>This example checks the visit-grained infusion source against the encounter spine. A production-ready relationship should return zero orphan rows, zero rows attached to a duplicated parent key, and a maximum of one parent match.</p>
+    <div class="code-card"><pre><code><span class="cm">-- Validate PcsMarAct_MarLastDocumented -> AdmVisits</span>
+WITH ParentKey AS (
+  SELECT SourceID, VisitID, COUNT_BIG(*) AS ParentRows
+  FROM AKULivendb.dbo.AdmVisits
+  WHERE VisitID IS NOT NULL
+  GROUP BY SourceID, VisitID
+),
+ChildKey AS (
+  SELECT SourceID, VisitID, COUNT_BIG(*) AS ChildRows
+  FROM AKULiveATdb.dbo.PcsMarAct_MarLastDocumented
+  WHERE VisitID IS NOT NULL
+  GROUP BY SourceID, VisitID
+)
+SELECT SUM(c.ChildRows) AS ChildRows,
+       SUM(CASE WHEN p.VisitID IS NULL THEN c.ChildRows ELSE 0 END) AS OrphanRows,
+       SUM(CASE WHEN p.ParentRows > 1 THEN c.ChildRows ELSE 0 END) AS AmbiguousParentRows,
+       MAX(COALESCE(p.ParentRows,0)) AS MaxParentMatches
+FROM ChildKey c
+LEFT JOIN ParentKey p
+  ON p.SourceID=c.SourceID AND p.VisitID=c.VisitID;</code></pre></div>
+    <p class="section-sub">Repeat this gate for every inferred relationship. For patient grain use <span class="code-chip">SourceID + PatientID</span>; for table-family detail use the full shared key, such as <span class="code-chip">SourceID + CwsApptID</span>.</p>
   </div>
 </section>
 
 <section>
   <div class="wrap">
     <div class="section-title">NPR element trace</div>
-    <h2 class="section-head">Where data originates in MEDITECH (Shift+F9)</h2>
-    <p>In a MEDITECH application you can press <b>Shift+F9</b> in any field to see its NPR DPM, Segment and Element (e.g. <span class="code-chip">ADM.PAT.street</span>). This guide's catalogs give you the SQL side of that mapping. To complete the backward trace from a SQL column to the MEDITECH element that populates it, you need the native mapping layer:</p>
+    <h2 class="section-head">The remaining evidence gap</h2>
+    <p>MEDITECH's guide uses <span class="code-chip">SysDrColumns.NprDpm</span>, <span class="code-chip">NprSegment</span> and <span class="code-chip">NprElement</span> to trace a SQL column back to its source. Those fields are not present in the supplied AKU catalog, so this site cannot validate backward NPR lineage on its own.</p>
     <ul class="guide-list">
-      <li>If <b>SysDrColumns</b> exists in the database (check above), run the newsletter's query joining <span class="code-chip">SysDrTables</span> ↔ <span class="code-chip">SysDrColumns</span> on <span class="code-chip">TableID</span> and filter on <span class="code-chip">NprElement</span>.</li>
-      <li>Otherwise use <b>Shift+F9</b> in the EMR for the exact NPR element, then find the SQL home with the mapping query above.</li>
-      <li>Fields marked <b>“Not captured by DR”</b> come from temporary screen structures — find the underlying data-structure table with the same pattern.</li>
+      <li>Use <b>Shift+F9</b> on the MEDITECH field to capture its NPR DPM, segment and element.</li>
+      <li>Use MEDITECH <b>Table Inquiry</b> or <b>Field Inquiry</b> when available to resolve the corresponding SQL table and column.</li>
+      <li>For production-grade lineage, request a read-only export of TableID, Application and Keylevel plus TableID, Name, SortKey, NprDpm, NprSegment, NprElement and ColumnPosition from an authorized TEST or LIVE Data Repository that has the native mapping layer.</li>
+      <li>Until that evidence is imported, label mappings as <b>schema-confirmed</b>, <b>procedure-confirmed</b> or <b>inferred</b>; never label them NPR-confirmed.</li>
     </ul>
   </div>
 </section>
@@ -174,13 +247,13 @@
   <div class="wrap">
     <div class="section-title">Online data model</div>
     <h2 class="section-head">How the tables link together</h2>
-    <p>MEDITECH's online Data Model shows how tables join for reporting. This site is your version of that model — curated, searchable, and generated from the live schema plus the FCAP1A build stored procedures:</p>
+    <p>MEDITECH's online Data Model shows documented reporting joins. This site is a curated AKU working model generated from the supplied schema and FCAP1A build procedures; it complements, but does not replace, MEDITECH's authoritative model:</p>
     <div class="actions" style="margin-top:18px">
       <a class="btn primary" href="explorer.html">Open the Schema Explorer <span class="arr">→</span></a>
       <a class="btn ghost" href="sql.html">Ready-to-run SQL Cookbook</a>
       <a class="btn ghost" href="sps.html">SP Workspace</a>
     </div>
-    <p class="section-sub">Every table in the explorer carries its key level, its feeder application, its dictionary links, and the exact join keys — <span class="code-chip">SourceID + PatientID</span> to the patient hub <span class="code-chip">HimRec_Main</span>, and <span class="code-chip">VisitID</span> to the encounter spine <span class="code-chip">AdmVisits</span>.</p>
+    <p class="section-sub">Every curated table in the Explorer carries a candidate grain, role, description, evidence-aware links and proposed join keys. Stored-procedure-confirmed joins are distinguished from schema-derived or key-grain-inferred links; all inferred joins still require the production relationship gate above.</p>
   </div>
 </section>
 

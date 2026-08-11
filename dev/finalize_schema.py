@@ -23,6 +23,37 @@ REMAINING_SOURCE_PATH = os.path.join(ROOT, "dev", "remaining_source_metadata.jso
 SOURCE_ROW_COUNTS_PATH = os.path.join(ROOT, "dev", "source_row_counts.json")
 
 
+# The full catalog extraction adds sources that were not part of the original
+# curated graph. Keep their product-domain classification here so a future
+# regeneration cannot introduce an unknown ``remaining`` topic and break the
+# Explorer at startup.
+REMAINING_TABLE_CONTRACTS = {
+    "AmbPatCm_PregnancyData": ("encounter", "entity", "encounter", "Pregnancy episode detail", "Pregnancy dates, status, fetal count, estimated delivery date, and obstetric episode attributes per patient."),
+    "AmbPatCm_PregnancyMain": ("encounter", "entity", "encounter", "Pregnancy summary", "Patient-level active pregnancy summary and active pregnancy protocol."),
+    "AmbPatCm_PregnancyNonVisitLog": ("encounter", "entity", "encounter", "Pregnancy non-visit log", "Pregnancy events documented outside a registered visit; low-volume and excluded from default populated views."),
+    "AmbPatCm_PregnancyVisitLog": ("encounter", "entity", "encounter", "Pregnancy visit linkage", "Links a pregnancy episode to its registration account through PregnancyVisit_RegAcctID."),
+    "CmgDevices_DevicePatHistory": ("careplan", "entity", "clinical", "Loaned device patient history", "Patient loan and return history for care-management devices; currently empty in the audited source."),
+    "CwsAppt_AuditTrail": ("encounter", "entity", "encounter", "Appointment audit trail", "Appointment changes, users, timestamps, reasons, locations, and registration-account references."),
+    "CwsAppt_Main_ApptComments": ("encounter", "entity", "encounter", "Appointment comments", "Sequenced free-text comments attached to an appointment; low-volume in the audited source."),
+    "CwsAppt_Participants": ("encounter", "entity", "encounter", "Appointment participants", "Participant type and participant value attached to an appointment; near-empty in the audited source."),
+    "CwsAppt_Resources": ("encounter", "entity", "encounter", "Appointment resources", "Rooms, resource groups, start times, durations, and resource types allocated to appointments."),
+    "EmrParam_AmbCanRegSocHis": ("identity", "dict", "dictionary", "Ambulatory social-history parameters", "Facility configuration that points to social-history, occupation, and industry query definitions."),
+    "EmrParam_CcdFacilityGroups": ("identity", "dict", "dictionary", "CCD facility-group parameters", "Facility-group query mappings for smoking, pregnancy, ethnicity, race, and gender; currently empty."),
+    "EmrParam_CcdSocHistoryQrys": ("identity", "dict", "dictionary", "CCD social-history query map", "Configured CCD social-history query identifiers and sort order; currently empty."),
+    "EmrParam_PhsSocHistoryQrys": ("identity", "dict", "dictionary", "PHS social-history query map", "Configured PHS social-history query identifiers and sort order; currently empty."),
+    "MisQry_Main": ("identity", "dict", "dictionary", "Query dictionary", "Master definitions for configured patient and account questions, including text, type, response behavior, and NPR pointers."),
+    "PcsMarAct_BagInfusionLastDoc": ("medication", "entity", "clinical", "Last documented bag infusion", "Latest documented infusion rate, volume, status, user, and timing for each medication bag."),
+    "PcsMarAct_MarActivityTitr": ("medication", "entity", "clinical", "MAR titration activity", "Event-level infusion titration documentation, users, timestamps, clinical events, and IV smart-pump references."),
+    "PcsMarAct_MarLastDocumented": ("medication", "entity", "clinical", "Last documented MAR activity", "Latest medication administration and infusion dose, rate, volume, status, and documentation attributes per visit."),
+    "PcsMarAct_MarLastTitration": ("medication", "entity", "clinical", "Last documented titration", "Latest titration dose, rate, units, infusion status, and volume attributes per visit."),
+    "PcsMarAct_MarMeds": ("medication", "entity", "clinical", "MAR medication detail", "Medication mnemonic, generic name, trade name, and order-dictionary mapping for medication-administration records."),
+    "PcsMarAct_MarRxs": ("medication", "entity", "clinical", "MAR prescription detail", "Route, prescription type, medication strings, titration units, and IV documentation controls per visit."),
+    "SurCase_ActualProcs": ("careplan", "entity", "clinical", "Surgical actual procedures", "Actual procedures, primary/secondary status, surgeon, laterality, wound class, severity, and procedure timing."),
+    "SurCase_ActualProcSurgTimes": ("careplan", "entity", "clinical", "Procedure surgeon times", "Surgeon start and through timestamps for an actual surgical procedure."),
+    "SurCase_Implant": ("careplan", "entity", "clinical", "Surgical implants", "Implant identity, quantity, manufacturer, lot, serial, site, expiry, charge, and device-identifier details."),
+}
+
+
 def load_schema():
     text = io.open(SCHEMA_PATH, encoding="utf-8").read()
     match = re.search(r"window\.SCHEMA_DATA\s*=\s*(\{.*\});", text, re.S)
@@ -195,8 +226,22 @@ def main():
             if tables[name].get("topic") == "remaining" and name not in remaining_sources:
                 del tables[name]
         for name, definition in remaining_sources.items():
+            contract = REMAINING_TABLE_CONTRACTS.get(name)
+            if contract:
+                topic, role, zone, label, description = contract
+                definition = dict(definition)
+                definition.update({
+                    "topic": topic,
+                    "role": role,
+                    "zone": zone,
+                    "label": label,
+                    "desc": description,
+                })
             if name not in tables or len(definition.get("cols", [])) > len(tables[name].get("cols", [])):
                 tables[name] = definition
+            elif contract:
+                for field in ("topic", "role", "zone", "label", "desc"):
+                    tables[name][field] = definition[field]
     assets, db_votes = parse_sql_assets(tables)
 
     source_counts = {"near_empty_threshold": 1000, "tables": {}}

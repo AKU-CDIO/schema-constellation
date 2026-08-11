@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AKU CDIO MAYO · Meditech Star Schema Explorer</title>
-<link rel="stylesheet" href="assets/site.css?v=76">
-<link rel="stylesheet" href="assets/account.css?v=1">
+<link rel="stylesheet" href="assets/site.css?v=77">
+<link rel="stylesheet" href="assets/account.css?v=2">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <meta name="description" content="Interactive star-schema constellation of the AKU Meditech EMR: click a table to see its neighbours, join keys (patient vs visit grain) and relationships, with a VisitID-only filter.">
 <meta property="og:type" content="website">
@@ -185,7 +185,7 @@
     border-left:1px solid var(--line);z-index:25;display:flex;flex-direction:column;
     transform:translateX(0);transition:transform .28s cubic-bezier(.4,0,.2,1);
   }
-  .detail.hidden{transform:translateX(105%)}
+  .detail.hidden{display:none}
   .detail-head{padding:17px 20px 13px;border-bottom:1px solid var(--line);flex:none}
   .crumb{font-size:11px;color:var(--faint);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
   .crumb .cb{cursor:pointer;padding:3px 9px;border-radius:6px;border:1px solid var(--line2);font-size:11px;color:var(--muted);transition:.15s;background:#fff}
@@ -303,8 +303,38 @@
   .edge.qpath{opacity:1;stroke-width:2.4;stroke:var(--accent);filter:drop-shadow(0 0 8px rgba(47,107,255,.5))}
   .node.qnode .card{stroke:var(--accent);stroke-width:1.9;filter:drop-shadow(0 0 14px rgba(47,107,255,.4))}
   .qdesc{font-size:13.5px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+  .user-summary-copy,.user-chevron{display:none}
+  .user-account>summary{padding-right:6px}
+
+  @media(max-width:900px){
+    header{flex-wrap:wrap;gap:8px;padding:8px 10px}
+    .brand{margin-right:auto}
+    .brand .sub{display:none}
+    header .links{order:4;width:100%;overflow-x:auto;gap:3px;padding-bottom:2px}
+    header .links a{flex:0 0 auto;padding:6px 10px;font-size:12.5px}
+    .searchwrap{order:3;min-width:170px;max-width:none;margin-left:0}
+    header > .stats{display:none}
+    aside{width:220px}
+    .hint{max-width:calc(100% - 28px)}
+    .legend{overflow-x:auto;justify-content:flex-start}
+    .detail{width:min(452px,100%)}
+  }
+
+  @media(max-width:620px){
+    .brand h1{font-size:14px}
+    .logo{width:34px;height:34px;border-radius:9px}
+    .logo svg{inset:6px;width:22px;height:22px}
+    aside{width:176px}
+    .side-scroll{padding-inline:6px}
+    .vf{align-items:flex-start;padding:7px;font-size:11px}
+    .topic{padding:7px}
+    .topic .tname{font-size:12px}
+    .hint{display:none}
+    .centerpill{top:8px;right:8px}
+    .cpb{padding:7px 10px;font-size:11px}
+  }
 </style>
-<script src="assets/account.js?v=1" defer></script>
+<script src="assets/account.js?v=2" defer></script>
 </head>
 <body>
 <div id="app">
@@ -345,7 +375,7 @@
   <div class="main">
     <aside>
       <div class="side-scroll">
-        <label class="vf" id="usableWrap" title="Hide source tables with zero or fewer than 1,000 rows"><input type="checkbox" id="usableOnly" checked><span>Populated tables only</span><b id="usableCount">—</b></label>
+        <label class="vf" id="usableWrap" title="Hide source tables with zero or 1-999 rows; keep unknown counts visible"><input type="checkbox" id="usableOnly" checked><span>Exclude empty / near-empty</span><b id="usableCount">—</b></label>
         <label class="vf" id="vfWrap" title="Show only source tables that carry a VisitID"><input type="checkbox" id="visitOnly"><span>Visit-grained tables only</span><b id="vfCount">67</b></label>
         <label class="vf" id="allLinksWrap" title="Show schema-derived and key-grain links in addition to the curated overview"><input type="checkbox" id="allLinks"><span>All documented links</span><b id="allLinksCount">—</b></label>
         <div class="side-label">Data Topics</div>
@@ -367,8 +397,8 @@
   </div>
 </div>
 
-<script src="data/schema.js?v=5"></script>
-<script src="data/phases.js?v=3"></script>
+<script src="data/schema.js?v=6"></script>
+<script src="data/phases.js?v=5"></script>
 <script>
 "use strict";
 const DATA = window.SCHEMA_DATA || {};
@@ -586,10 +616,16 @@ function keyAbbr(on){
   return String(on).split(/ ?[+=] ?/).map(k => KEY_ABBR[k] || k).join(" + ");
 }
 function keyFull(on){ return String(on); }
-function roleLabel(t){ return DATA.role_label[t.role] || t.role.toUpperCase(); }
 function roleOf(t){ return ROLE_STYLE[t.role] ? t.role : "entity"; }
 function roleStyle(t){ return ROLE_STYLE[roleOf(t)]; }
-function topicOf(t){ return DATA.topics.find(x => x.id === t.topic); }
+function roleLabel(t){ return (DATA.role_label || {})[t.role] || roleStyle(t).label; }
+function topicOf(t){
+  return (DATA.topics || []).find(x => x.id === t.topic) || {
+    id: t.topic || "uncategorized",
+    name: catName(t.topic || "uncategorized"),
+    color: catColor(t.topic || "uncategorized"),
+  };
+}
 
 function splitName(name, compact){
   if (compact){

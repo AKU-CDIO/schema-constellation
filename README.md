@@ -19,50 +19,48 @@ Live: `https://schema-constellation-864230826730.us-central1.run.app/index.html`
 
 ## Serve locally
 
+Use the production server locally so authentication-session and security behavior are exercised:
+
 ```powershell
 cd schema-constellation
-python -m http.server 8123 --bind 127.0.0.1
-# open http://127.0.0.1:8123/index.html
+$env:PORT = "8123"
+node server.js
+# open http://127.0.0.1:8123/
 ```
 
 ## Test
 
-Playwright regression scripts live in `dev/tests/`. They expect the local server on `127.0.0.1:8123`:
+The production contract tests cover schema integrity, row-count quality bands, all 54 topic/SP contracts, all 63 SQL assets, navigation, account UI, mapping evidence, and server authentication:
 
 ```powershell
-cd schema-constellation\dev\tests
-python check_index_topics.py     # landing + topics + back links
-python check_explorer_keys.py    # explorer join-key colours + VisitID filter
-python check_sps_visit.py        # SP workspace visit keys
-python check_sps_trace.py        # SP trace SQL
-python check_topics_trace_sps.py # topics trace + deep links + sps search
-python layout_check2.py          # page layout regression
-python check_back.py             # back/close navigation
-python check_sidebar.py          # explorer sidebar
-python check_visit_rels.py       # visit relationships
-python func_check_new.py         # functional drill-down
-python func_check_doc.py         # document topic
-python check_doctopic_sp.py      # document topic in SP workspace
-python site_check_all.py         # smoke all pages
+python dev/tests/check_account_ui.py
+python dev/tests/check_auth_static.py
+python dev/tests/check_data_integrity.py
+python dev/tests/check_remaining_topics.py
+python dev/tests/check_sp_review_data.py
+python dev/tests/check_sql_static.py
+python dev/tests/check_production_readiness.py
+node dev/tests/check_auth_runtime.js
 ```
 
-Live (post-deploy) checks: `live_check2.py`, `live_check3.py`, `live_trace_check2.py` run against the GCS URLs.
+Playwright browser checks in `dev/tests/` exercise the local site on `127.0.0.1:8123`.
 
 ## Deploy
 
-The site is static and served from Google Cloud Storage. Deploy with no-cache headers so every push is immediately visible:
+Production is a private Google Cloud Run service protected by Identity-Aware Proxy. Deploy the exact validated repository root:
 
 ```powershell
-gsutil -m -h "Cache-Control: public, max-age=0, must-revalidate" cp `
-  -r index.html explorer.html topics.html sql.html sps.html sp-review.html 404.html sitemap.xml robots.txt assets data `
-  gs://cdio-migration-schema-constellation
+gcloud run deploy schema-constellation --source . --project cdiorg-migration --region us-central1 --quiet
 ```
+
+Keep the legacy GCS bucket private; a public object URL would bypass the application and IAP controls. The application accepts IAP identities only from `@gcp.cdio.aku.edu` in Cloud Run.
 
 The fcap1a stored-procedure sources used for SP semantics are in `dev/fcap1a_utf8/`.
 
 ## Notes
 
 - Schema generated from the AKU Meditech schema dump + FCAP1A build stored procedures.
+- The supplied AKU catalog contains no `SysDrTables` or `SysDrColumns`. `mapping.html` therefore supports structural discovery and candidate relationships, but does not claim official Keylevel, SortKey, feeder-application, or NPR DPM/segment/element lineage.
 - Analysis window: 2022-11-05 → 2026-06-14.
 - Join-key convention: blue = PatientID grain (`SourceID + PatientID`), amber = VisitID grain (`SourceID + VisitID`).
 

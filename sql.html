@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SQL Cookbook · AKU CDIO MAYO</title>
-<link rel="stylesheet" href="assets/site.css?v=76">
-<link rel="stylesheet" href="assets/account.css?v=1">
+<link rel="stylesheet" href="assets/site.css?v=77">
+<link rel="stylesheet" href="assets/account.css?v=2">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <meta name="description" content="Ready-to-run SQL for real Meditech EMR questions — cohort, demographics, diagnoses, labs, medications and more, with the join path shown.">
 <meta property="og:type" content="website">
@@ -14,7 +14,7 @@
 <meta property="og:description" content="Ready-to-run SQL for real Meditech EMR questions — cohort, demographics, diagnoses, labs, medications and more, with the join path shown.">
 <meta property="og:url" content="https://schema-constellation-864230826730.us-central1.run.app/sql.html">
 <meta name="twitter:card" content="summary">
-<script src="assets/account.js?v=1" defer></script>
+<script src="assets/account.js?v=2" defer></script>
 </head>
 <body>
 <nav class="nav">
@@ -109,8 +109,8 @@ function valSql(topic, members, anchor){
 }
 
 Promise.all([
-  fetch("data/schema.js?v=5").then(r => r.text()),
-  fetch("data/phases.js?v=4").then(r => r.text()),
+  fetch("data/schema.js?v=6").then(r => r.text()),
+  fetch("data/phases.js?v=5").then(r => r.text()),
 ]).then(([t, p]) => {
   const m = t.match(/window\.SCHEMA_DATA\s*=\s*(\{.*\});/s);
   const pm = p.match(/window\.SCHEMA_PHASES\s*=\s*(\{.*\});/s);
@@ -220,7 +220,7 @@ Promise.all([
     });
   });
 }).catch(() => {
-  $("#sqlList").innerHTML = '<div class="topic-loading">Could not load data/schema.js?v=5.</div>';
+  $("#sqlList").innerHTML = '<div class="topic-loading">Could not load data/schema.js?v=6.</div>';
 });
 </script>
 </body>
