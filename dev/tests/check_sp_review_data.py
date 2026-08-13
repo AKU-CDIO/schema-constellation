@@ -28,7 +28,7 @@ assert Counter(item["event_based"] for item in topics) == Counter({True: 48, Fal
 assert not {item["id"] for item in topics if item["status"] == "shared"}
 assert not {item["id"] for item in topics if item["status"] == "blueprint"}
 
-required = {"id", "name", "description", "procedure", "output", "status", "priority", "event_based", "event_model", "grain", "canonical_time", "event_rationale", "planned_sources", "sql_sources", "findings", "recommendations", "query", "query_kind", "author", "evidence_tier"}
+required = {"id", "name", "description", "procedure", "output", "status", "priority", "event_based", "event_model", "grain", "canonical_time", "event_rationale", "planned_sources", "sql_sources", "findings", "recommendations", "suggestions", "query", "query_kind", "author", "evidence_tier"}
 for item in topics:
     assert required <= set(item), item["id"]
     assert item["procedure"].startswith("usp_Build_FCAP1A_")
@@ -36,8 +36,15 @@ for item in topics:
     assert item["description"] and item["grain"] and item["canonical_time"] and item["event_rationale"]
     assert "SELECT" in item["query"].upper()
     assert "undefined" not in item["query"].lower()
+    for suggestion in item["suggestions"]:
+        assert suggestion["check"] in {1, 2, 3, 4}, (item["id"], suggestion)
+        assert suggestion["note"], (item["id"], suggestion)
     if item["status"] in {"implemented", "shared"}:
         assert item["asset"] in assets
+        assert "Reconcile planned-vs-SQL source coverage before accepting the procedure as complete." in item["recommendations"], item["id"]
+        assert "Build into a staging table and publish with a short transactional swap." in item["recommendations"], item["id"]
+        assert "Add window/watermark parameters and an incremental execution path." in item["recommendations"], item["id"]
+        assert "Define output indexes for patient, visit, event time, and the natural record key." in item["recommendations"], item["id"]
     if item["status"] in {"blueprint", "source-gap"}:
         assert item["recommendations"]
 
@@ -52,7 +59,9 @@ assert summary["xact_abort_primary"] == 33
 assert summary["transaction_primary"] == 33
 assert summary["parameterized_primary"] == 33
 assert summary["indexed_primary"] == 37
-assert len(review["priorities"]) >= 7
+assert summary["topics_with_suggestions"] == 12
+assert summary["suggestion_count"] == 19
+assert len(review["priorities"]) >= 8
 
 asset_ids = {asset["id"] for asset in schema["procedures"]}
 assert set(assets) == asset_ids

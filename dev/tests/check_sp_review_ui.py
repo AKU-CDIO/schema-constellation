@@ -15,7 +15,17 @@ with sync_playwright() as p:
 
     assert page.locator("[data-topic]").count() == 54
     assert page.locator(".asset-card").count() == 63
-    assert page.locator(".priority-card").count() >= 7
+    assert page.locator(".priority-card").count() >= 8
+    assert page.locator(".priority-card:has-text('Apply SP review suggestions')").count() == 1
+    assert page.locator(".review-card:has-text('SP review suggestions')").count() == 54
+    assert page.locator("[data-check]").count() == 19
+    assert page.locator("#review-encounter [data-check=\"4\"]").count() == 1
+    assert page.locator("#review-encounter").inner_text().count("Check 4") == 1
+    encounter = page.locator("#review-encounter").inner_text()
+    assert "Reconcile planned-vs-SQL source coverage" in encounter
+    assert "Build into a staging table and publish" in encounter
+    assert "Add window/watermark parameters" in encounter
+    assert "Define output indexes for patient, visit, event time" in encounter
     assert page.locator("#rvTotal").inner_text() == "54"
     assert page.locator("#rvImplemented").inner_text() == "54"
     assert page.locator("#rvShared").inner_text() == "0"

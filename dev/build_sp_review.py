@@ -139,6 +139,46 @@ DISCOVERY_TERMS = {
 }
 
 
+# Curated, evidence-based suggestions keyed by primary procedure name.
+CURATED_SUGGESTIONS = {
+    "usp_Build_FCAP1A_ClinicalNotes_Extended": [
+        {"check": 2, "note": "Window filter uses t.RowUpdateDateTime (line ~194); use the document time EmrDocData_Main.DateTime (alias m) for the extraction window and keep RowUpdateDateTime only for line de-duplication ordering."},
+        {"check": 3, "note": "DocumentID is cast from EmrDocDataID; confirm EmrDocDataID is globally unique so the (PatientID, DocumentID) primary key cannot collide across sources."},
+    ],
+    "usp_Build_FCAP1A_ClinicalNarrative_Extended": [
+        {"check": 2, "note": "Window filter uses t.RowUpdateDateTime; use the document/report clinical time for the extraction window and RowUpdateDateTime only for de-duplication."},
+    ],
+    "usp_Build_FCAP1A_Diagnoses_Extended": [
+        {"check": 2, "note": "Window filter uses d.RowUpdateDateTime (lines ~448-450); AbsAcct_Diagnoses.DiagnosisEffectiveDateID is the clinical diagnosis time and is already exposed in the output."},
+        {"check": 3, "note": "SELECT DISTINCT protects against join expansion but also hides real duplicates; verify visit-diagnosis grain with a natural-key duplicate query instead."},
+    ],
+    "usp_Build_FCAP1A_Encounters_Extended": [
+        {"check": 3, "note": "Window predicate uses BETWEEN @WindowStart AND @WindowEndNextDay (line ~486); use >= @WindowStart AND < @WindowEndNextDay for an exclusive upper bound."},
+        {"check": 4, "note": "AdmBase LEFT JOIN uses a.SourceID = r.SourceID (line ~472); if VisitID is globally unique across sources, SourceID is redundant in the join."},
+    ],
+    "usp_Build_FCAP1A_Flowsheets_Extended": [
+        {"check": 2, "note": "Observation time has no dedicated source column: PhaPatData/AdmVitalSigns expose only RowUpdateDateTime; the COALESCE(LastEventDateTime, ErTriageDateTime, RowUpdateDateTime) window proxy should be documented as the observation-time contract."},
+        {"check": 3, "note": "@WindowEnd is hard-coded 2026-06-14 while the header comment and sibling SPs use 2026-01-31; align the fixed window constant with the cohort window."},
+    ],
+    "usp_Build_FCAP1A_MedicalDevices": [
+        {"check": 2, "note": "Surgical-implant ImplantDateTime is mapped from CwsAppt_Main.DateTime (appointment time); confirm SurCase_Implant has no true implant date (ImplantManufacturedDate/ImplantsExpirationDate are dates but not the implant time)."},
+        {"check": 3, "note": "No window predicate is applied on ImplantDateTime; the procedure builds the full device history regardless of @WindowStart/@WindowEnd."},
+    ],
+    "usp_Build_FCAP1A_PatientInsurance": [
+        {"check": 1, "note": "Snapshot topic filters on COALESCE(PolicyEffectiveDate, InsuranceExpirationDate, RowUpdateDateTime) with a lower bound; older coverage that is still valid but was never updated inside the window is dropped. For a snapshot contract, do not lower-bound on row-update time."},
+    ],
+    "usp_Build_FCAP1A_FamilyMedicalHistory": [
+        {"check": 1, "note": "Snapshot topic windows on COALESCE(FirstRecordedDate, LastRecordedDate, RowUpdateDateTime); a lower bound drops older valid family assertions not updated inside the window."},
+        {"check": 4, "note": "MemberComments CTE joins on (PatientID, SourceID, MemberNumberID); confirm MemberNumberID is unique per source before relying on it as the family-member key."},
+    ],
+}
+
+
+def load_sql_text(asset):
+    path = os.path.join(SQL_DIR, asset["file"])
+    return io.open(path, encoding="utf-8-sig", errors="replace").read()
+
+
 def proc_header(text):
     match = re.search(r"\b(CREATE\s+OR\s+ALTER|CREATE|ALTER)\s+PROCEDURE\s+(?:\[?dbo\]?\.)?\[?([A-Za-z0-9_]+)\]?", text, re.I)
     if not match:
@@ -158,6 +198,77 @@ def sql_sources(text, tables):
         if name in tables and not name.startswith("tbl_FCAP1A_") and name not in found:
             found.append(name)
     return found
+
+
+CHECKS = {
+    1: "Event-driven vs non-event-driven handling",
+    2: "Event-date column selection",
+    3: "Completeness (columns, rows, WHERE filters)",
+    4: "Join correctness and SourceID hygiene",
+}
+
+
+def window_bounds(text):
+    has_ws = bool(re.search(r"@WindowStart", text, re.I))
+    has_predicate = bool(re.search(r"(?:>=|<=|>|<|BETWEEN)\s*@WindowStart", text, re.I))
+    excl = bool(re.search(r"<\s*@WindowEnd(?:NextDay|Plus1)?\b", text, re.I)) or bool(re.search(r"<\s*DATEADD\(\s*DAY\s*,\s*1\s*,", text, re.I))
+    incl = bool(re.search(r"BETWEEN\s+@WindowStart\s+AND\s+@WindowEnd(?:NextDay|Plus1)?\b", text, re.I))
+    return excl, incl, has_ws and has_predicate and not excl and not incl
+
+
+def window_time_cols(text):
+    cols = []
+    pred_pat = re.compile(r"([^;\n]{0,120}?(?:>=|<=|>|<)\s*@WindowStart)", re.I)
+    for m in pred_pat.finditer(text):
+        snippet = m.group(1)
+        for c in re.findall(r"([A-Za-z_][A-Za-z0-9_]*\.(?:RowUpdateDateTime|DateTime|DateID|[A-Za-z0-9_]*Date[A-Za-z0-9_]*|ResultDateTime|OrderDatetime|ClinicalDateTime|AdmitDateTime|ServiceDateTime|ArrivalDateTime|StudyDateTime|EventDateTime))", snippet):
+            if c not in cols:
+                cols.append(c)
+    return cols
+
+
+def direct_rowupdate_filter(text):
+    return bool(re.search(r"\b\w+\.RowUpdateDateTime\s*(?:>=|<=|>|<)\s*@WindowStart", text, re.I))
+
+
+def sourceid_join_tables(text):
+    found = []
+    pat = re.compile(r"\b(?:INNER|LEFT|RIGHT|FULL|CROSS|OUTER)?\s*JOIN\b[^()]*?\bON\b[^()]*?(?=\s*(?:JOIN|INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|;))", re.I | re.S)
+    for m in pat.finditer(text):
+        chunk = " ".join(m.group(0).split())
+        if "SourceID" in chunk:
+            name_match = re.search(r"JOIN\s+\[?([\w.]+)\]?[\w\s]*\bON\b", chunk, re.I)
+            if name_match:
+                name = name_match.group(1).split(".")[-1]
+                if name and name not in found:
+                    found.append(name)
+    return found
+
+
+def sql_review_suggestions(proc, text, event_based, canonical_time):
+    """Suggestions for the four review checks, grounded in static SQL inspection."""
+    suggestions = []
+    excl, incl, lower_only = window_bounds(text)
+    time_cols = window_time_cols(text)
+    row_update_used = direct_rowupdate_filter(text)
+    if incl:
+        suggestions.append({"check": 3, "note": "Window predicate uses BETWEEN @WindowStart AND @WindowEndNextDay, which includes the day after @WindowEnd; prefer an exclusive upper bound (>= @WindowStart AND < @WindowEndNextDay)."})
+    if lower_only:
+        suggestions.append({"check": 3, "note": "Window predicate applies only a lower bound (>= @WindowStart); add an exclusive upper bound (< @WindowEndNextDay) so post-window rows are excluded."})
+    if row_update_used and canonical_time and canonical_time.lower() != "rowupdatedatetime":
+        suggestions.append({"check": 2, "note": f"Window filter is driven by a RowUpdateDateTime column; consider using the canonical clinical time ({canonical_time}) for the extraction window and RowUpdateDateTime only for de-duplication ordering."})
+    has_ws = bool(re.search(r"@WindowStart", text, re.I))
+    has_predicate = bool(re.search(r"(?:>=|<=|>|<|BETWEEN)\s*@WindowStart", text, re.I))
+    has_upper = bool(re.search(r"<\s*@WindowEnd(?:NextDay|Plus1)?\b|<\s*DATEADD\(\s*DAY\s*,\s*1\s*,", text, re.I))
+    if event_based and has_ws and (not has_predicate or (has_upper and not has_predicate)):
+        if has_upper and not has_predicate:
+            suggestions.append({"check": 1, "note": "Event-based topic declares window parameters but the primary query applies only an upper bound on the window end; add the lower-bound predicate on @WindowStart so the extract respects the study window start."})
+        else:
+            suggestions.append({"check": 1, "note": "Event-based topic declares window parameters but the primary query has no event-time window predicate; confirm the extract actually applies the study window."})
+    sid_joins = sourceid_join_tables(text)
+    if sid_joins:
+        suggestions.append({"check": 4, "note": "SourceID is used in join predicates on: " + ", ".join(sid_joins[:8]) + ". Keep SourceID only where record IDs are not globally unique across source systems; drop it from entity joins anchored by record IDs (VisitID, OmOrdID, SpecimenID, PrescriptionID, etc.) and retain it for dictionary/reference joins."})
+    return suggestions
 
 
 def audit_asset(asset, tables):
@@ -332,19 +443,32 @@ def main():
             findings.append(f"The primary SQL reads {len(extra_sources)} supporting table(s) not listed in the topic contract.")
         if audit:
             findings.extend(audit["findings"])
+            recommendations.extend([
+                "Reconcile planned-vs-SQL source coverage before accepting the procedure as complete.",
+                "Build into a staging table and publish with a short transactional swap.",
+                "Add window/watermark parameters and an incremental execution path.",
+                "Define output indexes for patient, visit, event time, and the natural record key.",
+            ])
             if audit["declaration"] == "alter":
                 recommendations.append("Change ALTER PROCEDURE to CREATE OR ALTER for repeatable deployment.")
-            if audit["drop_publish"]:
-                recommendations.append("Build into a staging table and publish with a short transactional swap.")
-            if not audit["parameters"]:
-                recommendations.append("Add window/watermark parameters and an incremental execution path.")
-            if not audit["index_count"]:
-                recommendations.append("Define output indexes for patient, visit, event time, and the natural record key.")
             if not audit["try_catch"]:
                 recommendations.append("Add TRY/CATCH, XACT_ABORT, failure logging, and THROW.")
         if event_based and not detected_event_time and output in tables:
             findings.append(f"The output has no detected canonical [{event_time}] event field.")
             recommendations.append(f"Expose a canonical {event_time} and retain source-specific timestamps separately.")
+
+        suggestions = []
+        if audit:
+            sql_text = load_sql_text(asset)
+            curated = CURATED_SUGGESTIONS.get(procedure, [])
+            suggestions.extend(curated)
+            for s in sql_review_suggestions(procedure, sql_text, event_based, event_time):
+                if any(e.get("check") == s["check"] for e in curated):
+                    continue
+                s_tokens = {w for w in s["note"].split() if len(w) > 3 and w not in ("predicate", "window", "the", "that", "with", "from", "this", "and", "for")}
+                if any(len(s_tokens & {w for w in e["note"].split() if len(w) > 3 and w not in ("predicate", "window", "the", "that", "with", "from", "this", "and", "for")}) >= 4 for e in suggestions):
+                    continue
+                suggestions.append(s)
 
         recommendations = list(dict.fromkeys(recommendations))
         if status in {"source-gap", "blueprint"} or (audit and not audit["try_catch"]) or len(missing_sources) >= 3:
@@ -364,7 +488,8 @@ def main():
             "missing_sources": missing_sources, "extra_sources": extra_sources,
             "asset": procedure if audit else None, "author": audit.get("author") if audit else None,
             "evidence_tier": evidence_tier, "evidence_note": evidence_note, "findings": findings,
-            "recommendations": recommendations, "query": query, "query_kind": query_kind,
+            "recommendations": recommendations, "suggestions": suggestions,
+            "query": query, "query_kind": query_kind,
         })
 
     status_counts = collections.Counter(review["status"] for review in reviews)
@@ -381,8 +506,11 @@ def main():
         "transaction_primary": sum(a["transaction"] for a in primary_audits),
         "parameterized_primary": sum(bool(a["parameters"]) for a in primary_audits),
         "indexed_primary": sum(a["index_count"] > 0 for a in primary_audits),
+        "topics_with_suggestions": sum(1 for r in reviews if r["suggestions"]),
+        "suggestion_count": sum(len(r["suggestions"]) for r in reviews),
     }
     priorities = [
+        {"priority": "medium", "title": "Apply SP review suggestions", "detail": f"{summary['topics_with_suggestions']} of {len(reviews)} implemented topics have {summary['suggestion_count']} actionable review suggestions across the four review checks (event handling, event-date selection, completeness, join/SourceID hygiene)."}] + [
         {"priority": "high" if status_counts["source-gap"] + status_counts["blueprint"] else "low", "title": "Dedicated procedure coverage", "detail": f"{len(reviews) - status_counts['source-gap'] - status_counts['blueprint']} of {len(reviews)} topics now have checked-in procedures; partial and external evidence tiers remain clearly labelled."},
         {"priority": "high", "title": "Reconcile source-to-SQL coverage", "detail": f"{missing_source_topics} implemented/shared topics list {missing_source_refs} planned source references that their primary SQL does not read."},
         {"priority": "high", "title": "Make publication atomic", "detail": f"All {summary['drop_publish_primary']} implemented primary procedures use DROP/CREATE publication; use staged tables plus a short transactional swap."},

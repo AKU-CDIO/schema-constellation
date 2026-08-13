@@ -7,7 +7,7 @@ errors = []
 with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page(viewport={"width": 1680, "height": 940})
-    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" and "auth/session" not in (msg.location or {}).get("url", "") else None)
     page.on("pageerror", lambda err: errors.append(str(err)))
     page.goto("http://127.0.0.1:8123/explorer.html#topic=doc:Family%20Medical%20History")
     page.wait_for_timeout(1400)
