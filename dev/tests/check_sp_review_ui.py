@@ -18,7 +18,7 @@ with sync_playwright() as p:
     assert page.locator(".priority-card").count() >= 8
     assert page.locator(".priority-card:has-text('Apply SP review suggestions')").count() == 1
     assert page.locator(".review-card:has-text('SP review suggestions')").count() == 54
-    assert page.locator("[data-check]").count() == 19
+    assert page.locator("[data-check]").count() == 31
     assert page.locator("#review-encounter [data-check=\"4\"]").count() == 1
     assert page.locator("#review-encounter").inner_text().count("Check 4") == 1
     encounter = page.locator("#review-encounter").inner_text()

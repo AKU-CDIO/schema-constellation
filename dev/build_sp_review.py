@@ -149,16 +149,33 @@ CURATED_SUGGESTIONS = {
         {"check": 2, "note": "Window filter uses t.RowUpdateDateTime; use the document/report clinical time for the extraction window and RowUpdateDateTime only for de-duplication."},
     ],
     "usp_Build_FCAP1A_Diagnoses_Extended": [
-        {"check": 2, "note": "Window filter uses d.RowUpdateDateTime (lines ~448-450); AbsAcct_Diagnoses.DiagnosisEffectiveDateID is the clinical diagnosis time and is already exposed in the output."},
-        {"check": 3, "note": "SELECT DISTINCT protects against join expansion but also hides real duplicates; verify visit-diagnosis grain with a natural-key duplicate query instead."},
+        {"check": 2, "note": "Window filter uses d.RowUpdateDateTime (lines ~448-450) instead of the clinical diagnosis time; AbsAcct_Diagnoses.DiagnosisEffectiveDateID is already exposed in the output, so window on it (or union both) to keep in-window effective diagnoses whose row was last updated outside the window."},
+        {"check": 3, "note": "SELECT DISTINCT protects against join expansion but also hides real duplicates; verify the visit-diagnosis grain (SourceID + VisitID + DiagnosisUrnID + SortOrder) with a natural-key duplicate query instead."},
     ],
     "usp_Build_FCAP1A_Encounters_Extended": [
-        {"check": 3, "note": "Window predicate uses BETWEEN @WindowStart AND @WindowEndNextDay (line ~486); use >= @WindowStart AND < @WindowEndNextDay for an exclusive upper bound."},
-        {"check": 4, "note": "AdmBase LEFT JOIN uses a.SourceID = r.SourceID (line ~472); if VisitID is globally unique across sources, SourceID is redundant in the join."},
+        {"check": 3, "note": "Window predicate uses BETWEEN @WindowStart AND @WindowEndNextDay (line ~486); use >= @WindowStart AND < @WindowEndNextDay so StartDateTime on the day after @WindowEnd is excluded."},
+        {"check": 4, "note": "AdmBase LEFT JOIN adds a.SourceID = r.SourceID (line ~472) on top of VisitID; the visit is anchored on PatientID + VisitID (PI + VI), so SourceID is redundant in the predicate — drop it (both CTEs partition by SourceID + VisitID, so confirm VisitID is unique across the two source systems before relying on VisitID alone)."},
+        {"check": 3, "note": "StartDateTime is a CASE over Admit/Arrival/Service time and the window filters on it (line ~486); visits where all three times are NULL are silently excluded. Confirm whether encounters without an admission/arrival/service time should be dropped or retained with a NULL StartDateTime."},
     ],
     "usp_Build_FCAP1A_Flowsheets_Extended": [
+        {"check": 1, "note": "Vitals are event-based (one row per observation) but the build is a per-visit snapshot: PK (PatientID, VisitID) with a single BloodPressure/Pulse/Temperature per row, so multiple observations per visit collapse and the observation timeline is lost. Re-grain to one row per observation (observation time + source rowid) or change the topic contract to a per-visit snapshot."},
         {"check": 2, "note": "Observation time has no dedicated source column: PhaPatData/AdmVitalSigns expose only RowUpdateDateTime; the COALESCE(LastEventDateTime, ErTriageDateTime, RowUpdateDateTime) window proxy should be documented as the observation-time contract."},
-        {"check": 3, "note": "@WindowEnd is hard-coded 2026-06-14 while the header comment and sibling SPs use 2026-01-31; align the fixed window constant with the cohort window."},
+        {"check": 3, "note": "The header comment and log remark document the fixed window as 2022-11-05 to 2026-01-31, but @WindowEnd is hard-coded 2026-06-14 (line ~74); update the stale comments to match the executed window (or align the constant)."},
+        {"check": 4, "note": "SELECT DISTINCT with PK (PatientID, VisitID): two observations for the same visit that differ in any measurement remain distinct rows and collide on the PK (the insert fails), while identical rows collapse. Fan-out from PhaPatData/AdmVitalSigns (multiple rows per visit) must be reduced before DISTINCT."},
+    ],
+    "usp_Build_FCAP1A_Immunizations_Extended": [
+        {"check": 2, "note": "EventDateTime is COALESCE(GivenDateTime, ReadDateTime, RowUpdateDateTime) (line ~250) and the window reuses the same expression (lines ~306-308), so the event time and window are consistent; document that RowUpdateDateTime is the event time for rows that were never administered or read (offered/read events)."},
+        {"check": 3, "note": "13 output columns are populated with hard-coded NULL (EligibilityStatus, EligibilityDateTime, FundingSourceID, VaccineFundingSourceID, ManufactureFree, DeliveryMgmtSiteMnemonicID, InjectionSite, InjectionAdminSiteID, VisGivenDateTime, VisPubDateTime, VirusInfoGivenDateTime, VirusInfoPublicationDateTime, MultiDoseLotDoseSummary); they belong to the six unread contract sources, so column completeness equals the missing-source gap."},
+        {"check": 4, "note": "The only SourceID join is the DPhaDrugData dictionary lookup (b.SourceID = d.SourceID AND b.DrugID = d.DrugID, line ~394): SourceID is part of the per-source drug-dictionary key and must be retained — it is a legitimate key, not a redundant predicate."},
+    ],
+    "usp_Build_FCAP1A_Labs_Extended": [
+        {"check": 4, "note": "LEFT JOIN #Micro on (SourceID, SpecimenID, VisitID) (lines ~590-596) fans out each result once per isolated organism; a specimen with several organisms duplicates the same NumericResult per organism. Keep organisms in their own table (or aggregate them) so the one-row-per-result grain holds."},
+        {"check": 4, "note": "Every specimen join uses SourceID + SpecimenID (specimen IDs are source-scoped), so SourceID is load-bearing in these joins and must be retained — a legitimate per-source specimen key, not a redundant predicate."},
+        {"check": 3, "note": "The results stage windows on COALESCE(ResultDateTime, RowUpdateDateTime) (lines ~408-410); rows that qualify only via RowUpdateDateTime are emitted with a NULL ResultDateTime, leaving the canonical event field empty."},
+    ],
+    "usp_Build_FCAP1A_Medications_Extended": [
+        {"check": 4, "note": "All joins use source-scoped keys — SourceID + PrescriptionID (PhaRx, PhaRxMedications, PhaRxAdministrations, PhaRxScannedMedPatientX) and SourceID + DrugID/GenericID (DPhaDrugData, DPhaGeneric dictionaries). SourceID is load-bearing here (prescription and drug IDs are per-source) and must be retained."},
+        {"check": 4, "note": "AdminEvents joins #Admin INNER JOIN #Rx on (SourceID, PrescriptionID) (line ~578): administrations whose prescription order falls outside the #Rx window are dropped even when the administration time is inside the window; consider a LEFT JOIN so in-window administrations of older orders are not lost."},
     ],
     "usp_Build_FCAP1A_MedicalDevices": [
         {"check": 2, "note": "Surgical-implant ImplantDateTime is mapped from CwsAppt_Main.DateTime (appointment time); confirm SurCase_Implant has no true implant date (ImplantManufacturedDate/ImplantsExpirationDate are dates but not the implant time)."},
@@ -169,7 +186,7 @@ CURATED_SUGGESTIONS = {
     ],
     "usp_Build_FCAP1A_FamilyMedicalHistory": [
         {"check": 1, "note": "Snapshot topic windows on COALESCE(FirstRecordedDate, LastRecordedDate, RowUpdateDateTime); a lower bound drops older valid family assertions not updated inside the window."},
-        {"check": 4, "note": "MemberComments CTE joins on (PatientID, SourceID, MemberNumberID); confirm MemberNumberID is unique per source before relying on it as the family-member key."},
+        {"check": 4, "note": "MemberComments CTE joins on (PatientID, SourceID, MemberNumberID); drop SourceID from the join — the family-member key is PatientID + MemberNumberID (PI-anchored), so SourceID is redundant in the predicate."},
     ],
 }
 
@@ -204,7 +221,7 @@ CHECKS = {
     1: "Event-driven vs non-event-driven handling",
     2: "Event-date column selection",
     3: "Completeness (columns, rows, WHERE filters)",
-    4: "Join correctness and SourceID hygiene",
+    4: "Join correctness, duplication/dropped-record risk, SourceID removal from joins",
 }
 
 
@@ -231,17 +248,32 @@ def direct_rowupdate_filter(text):
     return bool(re.search(r"\b\w+\.RowUpdateDateTime\s*(?:>=|<=|>|<)\s*@WindowStart", text, re.I))
 
 
-def sourceid_join_tables(text):
-    found = []
+def sourceid_join_details(text):
+    """Return {joined_table: ([entity keys paired with SourceID], anchored)}.
+
+    anchored=True when the join's ON clause also references PatientID/VisitID, so
+    SourceID is redundant there. anchored=False means SourceID is the source-scoping
+    key (per-source entity IDs like claims, specimens, prescriptions, dictionaries)
+    and is load-bearing.
+    """
+    found = {}
     pat = re.compile(r"\b(?:INNER|LEFT|RIGHT|FULL|CROSS|OUTER)?\s*JOIN\b[^()]*?\bON\b[^()]*?(?=\s*(?:JOIN|INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|;))", re.I | re.S)
     for m in pat.finditer(text):
         chunk = " ".join(m.group(0).split())
-        if "SourceID" in chunk:
-            name_match = re.search(r"JOIN\s+\[?([\w.]+)\]?[\w\s]*\bON\b", chunk, re.I)
-            if name_match:
-                name = name_match.group(1).split(".")[-1]
-                if name and name not in found:
-                    found.append(name)
+        if "SourceID" not in chunk:
+            continue
+        name_match = re.search(r"JOIN\s+\[?([\w.]+)\]?[\w\s]*\bON\b", chunk, re.I)
+        if not name_match:
+            continue
+        name = name_match.group(1).split(".")[-1]
+        if not name or name in found:
+            continue
+        keys = []
+        for col in re.findall(r"\.([A-Za-z_][A-Za-z0-9_]*)", chunk):
+            if col != "SourceID" and col.endswith("ID") and col not in keys:
+                keys.append(col)
+        anchored = bool(re.search(r"\b(?:PatientID|VisitID)\b", chunk))
+        found[name] = (keys, anchored)
     return found
 
 
@@ -265,9 +297,18 @@ def sql_review_suggestions(proc, text, event_based, canonical_time):
             suggestions.append({"check": 1, "note": "Event-based topic declares window parameters but the primary query applies only an upper bound on the window end; add the lower-bound predicate on @WindowStart so the extract respects the study window start."})
         else:
             suggestions.append({"check": 1, "note": "Event-based topic declares window parameters but the primary query has no event-time window predicate; confirm the extract actually applies the study window."})
-    sid_joins = sourceid_join_tables(text)
+    sid_joins = sourceid_join_details(text)
     if sid_joins:
-        suggestions.append({"check": 4, "note": "SourceID is used in join predicates on: " + ", ".join(sid_joins[:8]) + ". Keep SourceID only where record IDs are not globally unique across source systems; drop it from entity joins anchored by record IDs (VisitID, OmOrdID, SpecimenID, PrescriptionID, etc.) and retain it for dictionary/reference joins."})
+        redundant = {t: ks for t, (ks, anc) in sid_joins.items() if anc}
+        scoped = {t: ks for t, (ks, anc) in sid_joins.items() if not anc}
+        if redundant:
+            tables_plus_keys = ", ".join(f"{t} ({'+'.join(ks)})" if ks else t for t, ks in list(redundant.items())[:8])
+            all_keys = sorted({k for ks in redundant.values() for k in ks})
+            keys_txt = ", ".join(all_keys[:8]) if all_keys else "the entity record IDs"
+            suggestions.append({"check": 4, "note": f"SourceID is used in join predicates on: {tables_plus_keys}. Drop SourceID from these join predicates — the joins are anchored on PatientID + VisitID (PI + VI) and explicit entity keys ({keys_txt}), so SourceID is redundant in the key; retain it only as a source attribute, not a join key."})
+        if scoped:
+            tables_plus_keys = ", ".join(f"{t} ({'+'.join(ks)})" if ks else t for t, ks in list(scoped.items())[:8])
+            suggestions.append({"check": 4, "note": f"SourceID is the source-scoping key in joins to: {tables_plus_keys}. These entity IDs are per-source, so SourceID is load-bearing here and must be retained as part of the natural key — do not treat it as a redundant predicate."})
     return suggestions
 
 
@@ -466,7 +507,7 @@ def main():
                 if any(e.get("check") == s["check"] for e in curated):
                     continue
                 s_tokens = {w for w in s["note"].split() if len(w) > 3 and w not in ("predicate", "window", "the", "that", "with", "from", "this", "and", "for")}
-                if any(len(s_tokens & {w for w in e["note"].split() if len(w) > 3 and w not in ("predicate", "window", "the", "that", "with", "from", "this", "and", "for")}) >= 4 for e in suggestions):
+                if any(s_tokens and len(s_tokens & {w for w in e["note"].split() if len(w) > 3 and w not in ("predicate", "window", "the", "that", "with", "from", "this", "and", "for")}) >= 0.6 * max(len(s_tokens), 1) for e in suggestions):
                     continue
                 suggestions.append(s)
 
@@ -510,7 +551,7 @@ def main():
         "suggestion_count": sum(len(r["suggestions"]) for r in reviews),
     }
     priorities = [
-        {"priority": "medium", "title": "Apply SP review suggestions", "detail": f"{summary['topics_with_suggestions']} of {len(reviews)} implemented topics have {summary['suggestion_count']} actionable review suggestions across the four review checks (event handling, event-date selection, completeness, join/SourceID hygiene)."}] + [
+        {"priority": "medium", "title": "Apply SP review suggestions", "detail": f"{summary['topics_with_suggestions']} of {len(reviews)} implemented topics have {summary['suggestion_count']} actionable review suggestions across the four review checks (event handling, event-date selection, completeness, join correctness / SourceID removal)."}] + [
         {"priority": "high" if status_counts["source-gap"] + status_counts["blueprint"] else "low", "title": "Dedicated procedure coverage", "detail": f"{len(reviews) - status_counts['source-gap'] - status_counts['blueprint']} of {len(reviews)} topics now have checked-in procedures; partial and external evidence tiers remain clearly labelled."},
         {"priority": "high", "title": "Reconcile source-to-SQL coverage", "detail": f"{missing_source_topics} implemented/shared topics list {missing_source_refs} planned source references that their primary SQL does not read."},
         {"priority": "high", "title": "Make publication atomic", "detail": f"All {summary['drop_publish_primary']} implemented primary procedures use DROP/CREATE publication; use staged tables plus a short transactional swap."},

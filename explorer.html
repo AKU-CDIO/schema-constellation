@@ -466,11 +466,12 @@ const hasCol = (t, n) => (t.cols || []).some(c => c.n === n);
 const hasVisitID = t => hasCol(t, "VisitID");
 const hasPatientID = t => hasCol(t, "PatientID");
 const fq = n => `[${dbOf(n)}].[dbo].[${n}]`;
+const stripSid = s => String(s || "").split(" + ").filter(k => k !== "SourceID").join(" + ");
 const sourceKeys = t => {
   const names = new Set((t.cols || []).map(c => c.n));
-  let keys = (t.pk || []).filter(k => names.has(k));
-  if (!keys.length && names.has("SourceID") && names.has("PatientID")) keys = ["SourceID", "PatientID"];
-  if (!keys.length && names.has("SourceID") && names.has("VisitID")) keys = ["SourceID", "VisitID"];
+  let keys = (t.pk || []).filter(k => names.has(k) && k !== "SourceID");
+  if (!keys.length && names.has("PatientID")) keys = ["PatientID"];
+  if (!keys.length && names.has("VisitID")) keys = ["VisitID"];
   return keys;
 };
 const keyFamily = on => { const s = String(on || ""); return s.includes("VisitID") ? "kv" : s.includes("PatientID") ? "kp" : "ko"; };
@@ -516,11 +517,11 @@ function spValSql(p){
   const vis = p.members.filter(hasVisitID);
   if (vis.length){
     L.push(`--`, `-- (2b) VISIT GRAIN - every non-null VisitID resolves to its encounter spine`);
-    vis.forEach(t => { const s = spineOf(t.name); L.push(`SELECT COUNT(*) AS MissingVisit FROM ${fq(t.name)} t LEFT JOIN ${fq(s)} v ON t.SourceID=v.SourceID AND t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`); });
+    vis.forEach(t => { const s = spineOf(t.name); L.push(`SELECT COUNT(*) AS MissingVisit FROM ${fq(t.name)} t LEFT JOIN ${fq(s)} v ON t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`); });
   }
   const patientMembers = p.members.filter(t => t.name !== p.anchor && hasPatientID(t));
   L.push(`--`, `-- (3) HUB LINKAGE - patient-grained tables only`);
-  if (patientMembers.length) patientMembers.forEach(t => L.push(`SELECT COUNT(*) AS Orphans FROM ${fq(t.name)} t LEFT JOIN ${fq(p.anchor)} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE t.PatientID IS NOT NULL AND h.PatientID IS NULL;`));
+  if (patientMembers.length) patientMembers.forEach(t => L.push(`SELECT COUNT(*) AS Orphans FROM ${fq(t.name)} t LEFT JOIN ${fq(p.anchor)} h ON t.PatientID=h.PatientID WHERE t.PatientID IS NOT NULL AND h.PatientID IS NULL;`));
   else L.push(`-- No patient-grained source tables require a hub-orphan check.`);
   L.push(`--`, `-- (4) OUTPUT CONTRACT - run after an implemented build`);
   if ((outTable.cols || []).length){
@@ -530,7 +531,7 @@ function spValSql(p){
     L.push(`SELECT ${metrics.join(", ")} FROM [CDIO_MeditechDB].[dbo].[${out}];`);
   } else L.push(`-- Proposed output ${out} is not yet present in the schema catalog.`);
   L.push(`--`, `-- (5) CROSS-SP - patient outputs must be a subset of Demographics`);
-  if (hasPatientID(outTable)) L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM [CDIO_MeditechDB].[dbo].[${out}] d LEFT JOIN [CDIO_MeditechDB].[dbo].[tbl_FCAP1A_Demographics_Extended] g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE d.PatientID IS NOT NULL AND g.PatientID IS NULL;`);
+  if (hasPatientID(outTable)) L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM [CDIO_MeditechDB].[dbo].[${out}] d LEFT JOIN [CDIO_MeditechDB].[dbo].[tbl_FCAP1A_Demographics_Extended] g ON d.PatientID=g.PatientID WHERE d.PatientID IS NOT NULL AND g.PatientID IS NULL;`);
   else L.push(`-- Not applicable until the output contract includes PatientID.`);
   return L.join("\n");
 }
@@ -542,7 +543,7 @@ function spSectionHTML(p){
   const joinRels = (context.relationships || []).filter(r => r.kind === "join");
   const unresolved = (context.relationships || []).filter(r => r.kind === "association");
   const joins = joinRels.length
-    ? joinRels.map(r => `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl" style="font-size:11.5px">${esc(r.from)}</span><span class="qs-arr">-&gt;</span><span class="qs-tbl" style="font-size:11.5px">${esc(r.to)}</span><span class="qs-on">on ${esc(r.on)} | ${esc(r.card)} | ${esc(r.evidence || "curated")}</span></div>`).join("")
+    ? joinRels.map(r => `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl" style="font-size:11.5px">${esc(r.from)}</span><span class="qs-arr">-&gt;</span><span class="qs-tbl" style="font-size:11.5px">${esc(r.to)}</span><span class="qs-on">on ${esc(stripSid(r.on))} | ${esc(r.card)} | ${esc(r.evidence || "curated")}</span></div>`).join("")
     : `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl">No validated join</span><span class="qs-on">review source evidence before production use</span></div>`;
   const sourceAssets = ((p.item.sp && p.item.sp.assets) || []).map(id => (SPSOURCE.assets || {})[id]).filter(Boolean);
   const procedures = sourceAssets.length
@@ -1000,7 +1001,7 @@ function render(){
       lbl.setAttribute("font-size", Math.max(9, Math.round(cf.font * 0.52)));
       lbl.setAttribute("data-a", a); lbl.setAttribute("data-b", b);
       lbl.setAttribute("data-on", r.on);
-      lbl.textContent = isAssociation ? "TOPIC" : keyAbbr(r.on);
+      lbl.textContent = isAssociation ? "TOPIC" : keyAbbr(stripSid(r.on));
       root.appendChild(lbl);
     }
   });
@@ -1278,13 +1279,13 @@ function showTip(e, key, kind){
        <div class="tl">${esc(t.label)}</div>
        <div class="tr">${esc(st.label)} · ${esc(top ? top.name : "")} · ${esc(roleLabel(t))}</div>
        ${docs ? `<div class="tj">${esc(docs)}</div>` : ""}
-       ${key === "HimRec_Main" ? `<div class="tj">universal join key: PatientID (+SourceID)</div>` : ""}`;
+       ${key === "HimRec_Main" ? `<div class="tj">universal join key: PatientID</div>` : ""}`;
   } else {
     const [a, b] = key.split("|");
     let r = activeRelationships().find(r => (r.from === a && r.to === b) || (r.from === b && r.to === a));
     if (!r) r = { card: "1:N", on: "PatientID", note: "" };
     const dir = r.from === a ? `${a} → ${b}` : `${b} → ${a}`;
-    const onTxt = String(r.on || "PatientID");
+    const onTxt = stripSid(r.on || "PatientID");
     tip.innerHTML =
       `<div class="tt"><span>${esc(dir)}</span></div>
        <div class="tr">join key <b>${esc(onTxt)}</b> · <span class="abbr">${esc(keyAbbr(onTxt))}</span></div>
@@ -1329,7 +1330,7 @@ function relBetween(a, b){
 function joinNarrative(r, name){
   const other = r.from === name ? r.to : r.from;
   const cardTxt = r.card === "1:N" ? "one-to-many" : r.card === "1:1" ? "one-to-one" : String(r.card);
-  const onTxt = String(r.on);
+  const onTxt = stripSid(String(r.on));
   if (r.from === name){
     return `This table feeds <b>${esc(other)}</b> — a <b>${cardTxt}</b> relation joined on <code>${esc(onTxt)}</code>.`;
   }
@@ -1396,7 +1397,7 @@ function renderDetail(name, viaTopic){
         <span class="arr">${dir}</span>
         <div style="flex:1;min-width:0">
           <div class="rt">${esc(other)} <span style="font-family:var(--sans);font-weight:500;color:var(--muted)">(${esc(DATA.tables[other].label)})</span></div>
-          <div class="ron">on ${esc(r.on)}</div>
+          <div class="ron">on ${esc(stripSid(r.on))}</div>
           ${r.note ? `<div class="rnote">${esc(r.note)}</div>` : ""}
           <div class="badges" style="margin-top:5px"><span class="chip ext">${esc(r.kind || "join")}</span><span class="chip ext">${esc(r.evidence || "curated")}</span><span class="chip ext">${esc(r.confidence || "high")}</span></div>
           <div class="rnarr">${joinNarrative(r, name)}</div>
@@ -1412,7 +1413,7 @@ function renderDetail(name, viaTopic){
   path.forEach((n, i) => {
     if (i === 0){ jp += `<div class="jp"><b>${esc(n)}</b></div>`; return; }
     const r = relBetween(path[i-1], n);
-    jp += `<div class="jp" style="padding-left:16px">└─ <b>${esc(n)}</b>${r ? ` <span style="color:var(--warn)">[${esc(r.on)}]</span>` : ""}</div>`;
+    jp += `<div class="jp" style="padding-left:16px">└─ <b>${esc(n)}</b>${r ? ` <span style="color:var(--warn)">[${esc(stripSid(r.on))}]</span>` : ""}</div>`;
   });
 
   /* SQL snippet */
@@ -1838,10 +1839,10 @@ function buildLegend(){
   }).join("");
   $("#legend").innerHTML =
     `<span class="lg-hd">Star Schema</span>${rows}
-     <span class="z lgk" title="Edges joined on SourceID + PatientID (patient key)"><i style="background:#2f6bff"></i><b>Patient key</b></span>
-     <span class="z lgk" title="Edges joined on SourceID + VisitID (visit key — the encounter spine)"><i style="background:#e8860c"></i><b>Visit key</b></span>
+     <span class="z lgk" title="Edges joined on PatientID (patient key)"><i style="background:#2f6bff"></i><b>Patient key</b></span>
+     <span class="z lgk" title="Edges joined on VisitID (visit key — the encounter spine)"><i style="background:#e8860c"></i><b>Visit key</b></span>
      <a class="lg-sp" href="sps.html" title="The FCAP1A stored procedures, their joins, validations and cross-SP checks live on the second page">SP outputs →</a>
-     <a class="lg-sp" href="topics.html#encounter" title="AdmVisits ⇄ RegAcct_Main (SourceID + VisitID, 1:1) anchors every visit-grained table">Visit spine →</a>`;
+     <a class="lg-sp" href="topics.html#encounter" title="AdmVisits ⇄ RegAcct_Main (VisitID, 1:1) anchors every visit-grained table">Visit spine →</a>`;
 }
 
 /* ============================= init ============================= */

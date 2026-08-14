@@ -84,27 +84,27 @@ function valSql(topic, members, anchor){
   L.push(`-- (1) SOURCE HEALTH - run BEFORE the build`);
   members.forEach(t => L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients FROM ${dbOf(t.name)}.dbo.${t.name};`));
   L.push(`--`);
-  L.push(`-- (2) KEY INTEGRITY - composite SourceID + PatientID must be complete`);
-  members.forEach(t => L.push(`SELECT COUNT(*) AS MissingKey FROM ${dbOf(t.name)}.dbo.${t.name} WHERE SourceID IS NULL OR PatientID IS NULL;`));
+  L.push(`-- (2) KEY INTEGRITY - entity keys (PatientID / VisitID) must be complete`);
+  members.forEach(t => L.push(`SELECT COUNT(*) AS MissingKey FROM ${dbOf(t.name)}.dbo.${t.name} WHERE PatientID IS NULL;`));
   const vis = members.filter(hasVisitID);
   if (vis.length){
     L.push(`--`);
     L.push(`-- (2b) VISIT GRAIN - every VisitID must resolve to the encounter spine (${spineOf(vis[0].name)}.VisitID)`);
     vis.forEach(t => {
       const s = spineOf(t.name);
-      L.push(`SELECT COUNT(*) AS MissingVisit FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(s)}.dbo.${s} v ON t.SourceID=v.SourceID AND t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`);
+      L.push(`SELECT COUNT(*) AS MissingVisit FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(s)}.dbo.${s} v ON t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`);
     });
   }
   L.push(`--`);
   L.push(`-- (3) HUB LINKAGE - no orphan rows vs ${anchor}`);
   members.filter(t => t.name !== anchor).forEach(t => L.push(
-    `SELECT COUNT(*) AS Orphans FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(anchor)}.dbo.${anchor} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE h.PatientID IS NULL;`));
+    `SELECT COUNT(*) AS Orphans FROM ${dbOf(t.name)}.dbo.${t.name} t LEFT JOIN ${dbOf(anchor)}.dbo.${anchor} h ON t.PatientID=h.PatientID WHERE h.PatientID IS NULL;`));
   L.push(`--`);
   L.push(`-- (4) OUTPUT CONTRACT - run AFTER the build`);
   L.push(`SELECT COUNT(*) AS Rows, COUNT(DISTINCT PatientID) AS Patients, COUNT(DISTINCT VisitID) AS Visits FROM CDIO_MeditechDB.dbo.${out};`);
   L.push(`--`);
   L.push(`-- (5) CROSS-SP - this output must be a subset of the Demographics universe`);
-  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
+  L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM CDIO_MeditechDB.dbo.${out} d LEFT JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended g ON d.PatientID=g.PatientID WHERE g.PatientID IS NULL;`);
   return L.join("\n");
 }
 

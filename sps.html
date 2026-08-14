@@ -100,11 +100,12 @@ const domOf = t => outFull(t).replace("tbl_FCAP1A_", "").replace("_Extended", ""
 const planName = t => "sp_FCAP1A_" + domOf(t);
 const procName = t => "usp_Build_" + t.sp.name;
 const planStatus = t => (t.sp && t.sp.status) || "blueprint";
+const stripSid = s => String(s || "").split(" + ").filter(k => k !== "SourceID").join(" + ");
 const keyCols = t => {
   const names = colNames(t);
-  let keys = (t.pk || []).filter(k => names.has(k));
-  if (!keys.length && names.has("SourceID") && names.has("PatientID")) keys = ["SourceID", "PatientID"];
-  if (!keys.length && names.has("SourceID") && names.has("VisitID")) keys = ["SourceID", "VisitID"];
+  let keys = (t.pk || []).filter(k => names.has(k) && k !== "SourceID");
+  if (!keys.length && names.has("PatientID")) keys = ["PatientID"];
+  if (!keys.length && names.has("VisitID")) keys = ["VisitID"];
   return keys;
 };
 const CAT_ORDER = ["identity", "encounter", "diagnosis", "medication", "allergy",
@@ -139,12 +140,12 @@ function valSql(topic, members, anchor){
     L.push(`--`, `-- (2b) VISIT GRAIN - every non-null VisitID resolves to its encounter spine`);
     vis.forEach(t => {
       const spine = spineOf(t.name);
-      L.push(`SELECT COUNT(*) AS MissingVisit FROM ${fq(t.name)} t LEFT JOIN ${fq(spine)} v ON t.SourceID=v.SourceID AND t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`);
+      L.push(`SELECT COUNT(*) AS MissingVisit FROM ${fq(t.name)} t LEFT JOIN ${fq(spine)} v ON t.VisitID=v.VisitID WHERE t.VisitID IS NOT NULL AND v.VisitID IS NULL;`);
     });
   }
   const patientMembers = members.filter(t => t.name !== anchor && hasPatientID(t));
   L.push(`--`, `-- (3) HUB LINKAGE - patient-grained tables only`);
-  if (patientMembers.length) patientMembers.forEach(t => L.push(`SELECT COUNT(*) AS Orphans FROM ${fq(t.name)} t LEFT JOIN ${fq(anchor)} h ON t.SourceID=h.SourceID AND t.PatientID=h.PatientID WHERE t.PatientID IS NOT NULL AND h.PatientID IS NULL;`));
+  if (patientMembers.length) patientMembers.forEach(t => L.push(`SELECT COUNT(*) AS Orphans FROM ${fq(t.name)} t LEFT JOIN ${fq(anchor)} h ON t.PatientID=h.PatientID WHERE t.PatientID IS NOT NULL AND h.PatientID IS NULL;`));
   else L.push(`-- No patient-grained source tables require a hub-orphan check.`);
   L.push(`--`, `-- (4) OUTPUT CONTRACT - run after an implemented build`);
   if ((outTable.cols || []).length){
@@ -154,7 +155,7 @@ function valSql(topic, members, anchor){
     L.push(`SELECT ${metrics.join(", ")} FROM [CDIO_MeditechDB].[dbo].[${out}];`);
   } else L.push(`-- Proposed output ${out} is not yet present in the schema catalog.`);
   L.push(`--`, `-- (5) CROSS-SP - patient outputs must be a subset of Demographics`);
-  if (hasPatientID(outTable)) L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM [CDIO_MeditechDB].[dbo].[${out}] d LEFT JOIN [CDIO_MeditechDB].[dbo].[tbl_FCAP1A_Demographics_Extended] g ON d.SourceID=g.SourceID AND d.PatientID=g.PatientID WHERE d.PatientID IS NOT NULL AND g.PatientID IS NULL;`);
+  if (hasPatientID(outTable)) L.push(`SELECT COUNT(*) AS In${dom}NotInDemographics FROM [CDIO_MeditechDB].[dbo].[${out}] d LEFT JOIN [CDIO_MeditechDB].[dbo].[tbl_FCAP1A_Demographics_Extended] g ON d.PatientID=g.PatientID WHERE d.PatientID IS NOT NULL AND g.PatientID IS NULL;`);
   else L.push(`-- Not applicable until the output contract includes PatientID.`);
   return L.join("\n");
 }
@@ -178,14 +179,14 @@ function traceForPatient(p, pid){
   if (traceable.length) L.push(traceable.map(t => {
     if (hasPatientID(t)) return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS SrcRows FROM ${fq(t.name)} WHERE PatientID = '${q}'`;
     const s = spineOf(t.name);
-    return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS SrcRows FROM ${fq(t.name)} x INNER JOIN ${fq(s)} sp ON sp.SourceID=x.SourceID AND sp.VisitID=x.VisitID WHERE sp.PatientID = '${q}'`;
+    return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS SrcRows FROM ${fq(t.name)} x INNER JOIN ${fq(s)} sp ON sp.VisitID=x.VisitID WHERE sp.PatientID = '${q}'`;
   }).join("\nUNION ALL\n") + ";");
   else L.push(`-- No patient- or visit-grained sources are available for this topic.`);
   L.push(`--`, `-- (3) JOIN TRACE`);
   if (traceable.length) L.push(traceable.map(t => {
-    if (hasPatientID(t)) return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS JoinRows FROM ${fq(t.name)} x INNER JOIN ${fq(p.anchor)} h ON h.SourceID=x.SourceID AND h.PatientID=x.PatientID WHERE x.PatientID = '${q}'`;
+    if (hasPatientID(t)) return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS JoinRows FROM ${fq(t.name)} x INNER JOIN ${fq(p.anchor)} h ON h.PatientID=x.PatientID WHERE x.PatientID = '${q}'`;
     const s = spineOf(t.name);
-    return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS JoinRows FROM ${fq(t.name)} x INNER JOIN ${fq(s)} sp ON sp.SourceID=x.SourceID AND sp.VisitID=x.VisitID INNER JOIN ${fq(p.anchor)} h ON h.SourceID=sp.SourceID AND h.PatientID=sp.PatientID WHERE sp.PatientID = '${q}'`;
+    return `SELECT '${t.name}' AS SourceTable, COUNT(*) AS JoinRows FROM ${fq(t.name)} x INNER JOIN ${fq(s)} sp ON sp.VisitID=x.VisitID INNER JOIN ${fq(p.anchor)} h ON h.PatientID=sp.PatientID WHERE sp.PatientID = '${q}'`;
   }).join("\nUNION ALL\n") + ";");
   else L.push(`-- No traceable source joins.`);
   const grain = traceable.find(t => t.zone === "clinical") || traceable[0];
@@ -202,7 +203,7 @@ function spBlock(ph, t, tables, rels){
   const internal = rels.filter(r => r.kind === "join" && r.from !== r.to && members.some(x => x.name === r.from) && members.some(x => x.name === r.to));
   const anchor = (members.find(x => x.zone === "hub") || {name: "HimRec_Main"}).name;
   const visMembers = members.filter(hasVisitID);
-  const keys = [...new Set([...internal.map(r => r.on), ...(visMembers.length ? ["SourceID + VisitID"] : [])])];
+  const keys = [...new Set([...internal.map(r => stripSid(r.on)), ...(visMembers.length ? ["VisitID"] : [])])];
   const hubMember = members.some(x => x.name === anchor);
   const cards = members.map(m => `
     <div class="sp-card">
@@ -212,20 +213,20 @@ function spBlock(ph, t, tables, rels){
     </div>`).join("");
   const joins = internal.length
     ? internal.map(r => `
-      <div class="jp"><span>${esc(r.from)}</span><span class="arr">→</span><span>${esc(r.to)}</span><code>ON ${esc(r.on)}</code><em>${esc(r.card)}</em></div>`).join("")
-    : `<div class="jp jp-hub"><span>${esc(members.map(x => x.name).slice(0, 3).join(", "))}${members.length > 3 ? " …" : ""}</span><span class="arr">→</span><span>${esc(anchor)}</span><code>ON SourceID + PatientID</code><em>star join</em></div>`;
+      <div class="jp"><span>${esc(r.from)}</span><span class="arr">→</span><span>${esc(r.to)}</span><code>ON ${esc(stripSid(r.on))}</code><em>${esc(r.card)}</em></div>`).join("")
+    : `<div class="jp jp-hub"><span>${esc(members.map(x => x.name).slice(0, 3).join(", "))}${members.length > 3 ? " …" : ""}</span><span class="arr">→</span><span>${esc(anchor)}</span><code>ON PatientID</code><em>star join</em></div>`;
   const visitSpine = visMembers.length ? `
     <h4 style="margin-top:1.05rem">Visit / encounter spine · ${visMembers.length} visit-grained</h4>
     <div class="jpl">
-      <div class="jp jp-hub"><span>AdmVisits</span><span class="arr">⇄</span><span>RegAcct_Main</span><code>ON SourceID + VisitID</code><em>1:1 encounter spine</em></div>
-      ${visMembers.map(m => { const s = spineOf(m.name); return `<div class="jp"><span>${esc(s)}</span><span class="arr">→</span><span>${esc(m.name)}</span><code>ON SourceID + VisitID</code><em>1:N</em></div>`; }).join("")}
+      <div class="jp jp-hub"><span>AdmVisits</span><span class="arr">⇄</span><span>RegAcct_Main</span><code>ON VisitID</code><em>1:1 encounter spine</em></div>
+      ${visMembers.map(m => { const s = spineOf(m.name); return `<div class="jp"><span>${esc(s)}</span><span class="arr">→</span><span>${esc(m.name)}</span><code>ON VisitID</code><em>1:N</em></div>`; }).join("")}
     </div>` : "";
   const metaChips = [
     `<span class="chip" style="color:var(--muted)">${esc(ph.name)}</span>`,
     `${esc(planName(t))} <em>· ${esc(procName(t))}</em>`,
     `<strong>${planStatus(t).toUpperCase()}</strong>`,
     `${members.length} source tables`,
-    keys.length ? keys.join(" · ") : "SourceID + PatientID",
+    keys.length ? keys.join(" · ") : "PatientID",
     `→ CDIO_MeditechDB.dbo.${esc(outFull(t))}`,
   ];
   const sql = valSql(t, members, anchor);
@@ -248,7 +249,7 @@ function spBlock(ph, t, tables, rels){
       <div class="sp-col">
         <h4>Join plan${internal.length ? " (" + internal.length + " explicit joins)" : ""}</h4>
         <div class="jpl">
-          ${hubMember ? "" : `<div class="jp jp-hub"><span>${esc(anchor)}</span><span class="arr">→</span><span>every table</span><code>ON SourceID + PatientID</code><em>hub star</em></div>`}
+          ${hubMember ? "" : `<div class="jp jp-hub"><span>${esc(anchor)}</span><span class="arr">→</span><span>every table</span><code>ON PatientID</code><em>hub star</em></div>`}
           ${joins}
         </div>
         ${visitSpine}
@@ -301,8 +302,8 @@ Promise.all([
   const allKeys = new Set();
   rels.filter(r => r.from !== r.to && spTopics.some(({t}) => t.tables.includes(r.from)) && spTopics.some(({t}) => t.tables.includes(r.to)))
     .forEach(r => allKeys.add(r.on));
-  allKeys.add("SourceID + PatientID");
-  allKeys.add("SourceID + VisitID");
+  allKeys.add("PatientID");
+  allKeys.add("VisitID");
   $("#spKeys").textContent = allKeys.size;
   $("#spVisit").textContent = spTopics.reduce((a, {t}) => a + t.tables.filter(n => (tables[n] || {}).cols && hasVisitID(tables[n])).length, 0);
 
@@ -431,7 +432,7 @@ Promise.all([
     <div class="grid" style="margin-top:.6rem">
       <div class="card">
         <h3>Identity universe</h3>
-        <p>Every SP output must be a subset of <code>dbo.tbl_FCAP1A_Demographics_Extended</code> on <code>SourceID + PatientID</code>. Any patient found in a domain SP but missing here is a bug.</p>
+        <p>Every SP output must be a subset of <code>dbo.tbl_FCAP1A_Demographics_Extended</code> on <code>PatientID</code>. Any patient found in a domain SP but missing here is a bug.</p>
         <pre class="sql-code"><code>SELECT COUNT(DISTINCT PatientID) AS UniversePatients
 FROM   CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended;</code></pre>
       </div>
@@ -442,16 +443,16 @@ FROM   CDIO_MeditechDB.dbo.tbl_FCAP1A_Demographics_Extended;</code></pre>
 SELECT COUNT(*) AS InBoth
 FROM   CDIO_MeditechDB.dbo.${esc(outs[0])} a
 JOIN   CDIO_MeditechDB.dbo.${esc(outs[1])} b
-  ON a.SourceID = b.SourceID AND a.PatientID = b.PatientID;</code></pre>
+  ON a.PatientID = b.PatientID;</code></pre>
       </div>
       <div class="card">
         <h3>Visit linkage</h3>
-        <p>Every domain visit must exist in the Encounters SP output. Run for each domain SP after the build, on <code>SourceID + VisitID</code>.</p>
+        <p>Every domain visit must exist in the Encounters SP output. Run for each domain SP after the build, on <code>VisitID</code>.</p>
         <pre class="sql-code"><code>-- visits in ${esc(domOut)} that are not in Encounters
 SELECT COUNT(*) AS VisitsNotInEncounters
 FROM   CDIO_MeditechDB.dbo.${esc(domOut)} d
 LEFT   JOIN CDIO_MeditechDB.dbo.tbl_FCAP1A_Encounters_Extended e
-  ON d.SourceID = e.SourceID AND d.VisitID = e.VisitID
+  ON d.VisitID = e.VisitID
 WHERE  d.VisitID IS NOT NULL AND e.VisitID IS NULL;</code></pre>
       </div>
       <div class="card">
@@ -467,7 +468,7 @@ WHERE  d.VisitID IS NOT NULL AND e.VisitID IS NULL;</code></pre>
     <ol class="runbook">
       <li>For each SP topic, run validation steps (1)&#8211;(3) against the source tables. <code>MissingKey</code>, <code>MissingVisit</code> and <code>Orphans</code> must be zero.</li>
       <li>Build the SP; run (4) and confirm <code>Rows</code>/<code>Patients</code>/<code>Visits</code> are sane against the source sums.</li>
-      <li>Run the cross-SP checks: every domain SP must be a subset of the Demographics universe, domain visits must exist in the Encounters output, and pairwise SPs must reconcile on <code>SourceID + PatientID</code>.</li>
+      <li>Run the cross-SP checks: every domain SP must be a subset of the Demographics universe, domain visits must exist in the Encounters output, and pairwise SPs must reconcile on <code>PatientID</code>.</li>
       <li>Only the identity SP may define the universe; all other SPs are joins of source tables to the hub &#8212; never the reverse. Visit-grained tables must resolve every <code>VisitID</code> to the encounter spine (<code>AdmVisits.VisitID = RegAcct_Main.VisitID</code>).</li>
     </ol>`;
 }).catch(() => {

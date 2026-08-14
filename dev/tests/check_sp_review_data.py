@@ -59,8 +59,8 @@ assert summary["xact_abort_primary"] == 33
 assert summary["transaction_primary"] == 33
 assert summary["parameterized_primary"] == 33
 assert summary["indexed_primary"] == 37
-assert summary["topics_with_suggestions"] == 12
-assert summary["suggestion_count"] == 19
+assert summary["topics_with_suggestions"] == 15
+assert summary["suggestion_count"] == 31
 assert len(review["priorities"]) >= 8
 
 asset_ids = {asset["id"] for asset in schema["procedures"]}
