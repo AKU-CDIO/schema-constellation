@@ -387,7 +387,7 @@ def main():
             "id": asset_id,
             "name": parse_procedure_name(sql, asset_id),
             "file": filename,
-            "source_file": resolved_path,
+            "source_preference": "sps" if resolved_path != path else "repo",
             "author": author,
             "sql": sql,
             "joins": extract_joins(sql, tables, asset_id),
