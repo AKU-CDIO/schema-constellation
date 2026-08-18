@@ -28,7 +28,7 @@ assert Counter(item["event_based"] for item in topics) == Counter({True: 48, Fal
 assert not {item["id"] for item in topics if item["status"] == "shared"}
 assert not {item["id"] for item in topics if item["status"] == "blueprint"}
 
-required = {"id", "name", "description", "procedure", "output", "status", "priority", "event_based", "event_model", "grain", "canonical_time", "event_rationale", "planned_sources", "sql_sources", "findings", "recommendations", "suggestions", "improved_sp", "query", "query_kind", "author", "evidence_tier"}
+required = {"id", "name", "description", "procedure", "output", "status", "priority", "event_based", "event_model", "grain", "canonical_time", "event_rationale", "planned_sources", "sql_sources", "findings", "recommendations", "suggestions", "review_checks", "improved_sp", "query", "query_kind", "author", "evidence_tier"}
 for item in topics:
     assert required <= set(item), item["id"]
     assert item["procedure"].startswith("usp_Build_FCAP1A_")
@@ -40,6 +40,10 @@ for item in topics:
     for suggestion in item["suggestions"]:
         assert suggestion["check"] in {1, 2, 3, 4}, (item["id"], suggestion)
         assert suggestion["note"], (item["id"], suggestion)
+    assert len(item["review_checks"]) == 5, item["id"]
+    assert {check["check"] for check in item["review_checks"]} == {1, 2, 3, 4, 5}, item["id"]
+    assert all(check["label"] for check in item["review_checks"]), item["id"]
+    assert all(check["note"] for check in item["review_checks"]), item["id"]
     if item["status"] in {"implemented", "shared"}:
         assert item["asset"] in assets
         assert "Reconcile planned-vs-SQL source coverage before accepting the procedure as complete." in item["recommendations"], item["id"]

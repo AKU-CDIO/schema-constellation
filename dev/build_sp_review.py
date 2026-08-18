@@ -222,6 +222,7 @@ CHECKS = {
     2: "Event-date column selection",
     3: "Completeness (columns, rows, WHERE filters)",
     4: "Join correctness, duplication/dropped-record risk, SourceID removal from joins",
+    5: "Topic source contract coverage",
 }
 
 
@@ -310,6 +311,57 @@ def sql_review_suggestions(proc, text, event_based, canonical_time):
             tables_plus_keys = ", ".join(f"{t} ({'+'.join(ks)})" if ks else t for t, ks in list(scoped.items())[:8])
             suggestions.append({"check": 4, "note": f"SourceID is the source-scoping key in joins to: {tables_plus_keys}. These entity IDs are per-source, so SourceID is load-bearing here and must be retained as part of the natural key — do not treat it as a redundant predicate."})
     return suggestions
+
+
+def format_join_tables(join_map):
+    return ", ".join(f"{t} ({'+'.join(ks)})" if ks else t for t, ks in list(join_map.items())[:8])
+
+
+def default_review_note(check, *, text, event_based, model, grain, canonical_time,
+                        detected_event_time, missing_sources, extra_sources,
+                        planned_sources, sql_sources):
+    if check == 1:
+        if event_based:
+            return f"Topic is reviewed as {model} with grain '{grain}'; static inspection did not detect a stronger grain or event-handling mismatch in the checked-in build."
+        return f"Topic is reviewed as {model} with grain '{grain}'; no event-stream re-graining change is required for this contract."
+    if check == 2:
+        if detected_event_time:
+            return f"Canonical time is documented as {canonical_time} and the output exposes {detected_event_time}; static inspection did not find a stronger event-time selection issue."
+        if event_based:
+            return f"Canonical time is documented as {canonical_time}; production execution should still confirm it is populated consistently for event rows."
+        return f"This {model} contract does not rely on a single event stream, and no stronger event-time selection issue was detected in static review."
+    if check == 3:
+        if not text:
+            return "No checked-in SQL was available for a completeness and window-boundary review."
+        excl, incl, lower_only = window_bounds(text)
+        has_window = bool(re.search(r"@WindowStart|@WindowEnd", text, re.I))
+        if has_window and excl and not incl and not lower_only:
+            return "Window logic uses an inclusive start and exclusive next-day upper bound; no obvious boundary defect was detected in static review."
+        if has_window and not excl and not incl and not lower_only:
+            return "Window parameters are declared, and static inspection did not surface a stronger completeness or boundary issue."
+        return "Procedure appears to be an intentional full-history or full-refresh extract without a constrained date window."
+    if check == 4:
+        if not text:
+            return "No checked-in SQL was available for a join and duplication review."
+        sid_joins = sourceid_join_details(text)
+        redundant = {t: ks for t, (ks, anc) in sid_joins.items() if anc}
+        scoped = {t: ks for t, (ks, anc) in sid_joins.items() if not anc}
+        if scoped and not redundant:
+            return f"SourceID is retained only on source-scoped joins ({format_join_tables(scoped)}); no redundant PI/VI-anchored SourceID join was detected."
+        if not sid_joins:
+            return "No obvious redundant SourceID join or uncontrolled join fan-out was detected in static review."
+        return "Join review did not surface an additional issue beyond the flagged SourceID or duplication findings."
+    if check == 5:
+        if missing_sources and extra_sources:
+            return f"Topic source contract is only partially covered: SQL does not read {', '.join(missing_sources)}, and it also depends on supporting sources not listed in the contract ({', '.join(extra_sources)})."
+        if missing_sources:
+            return f"Topic source contract is not fully covered by the primary SQL; missing reads: {', '.join(missing_sources)}."
+        if extra_sources:
+            return f"Primary SQL covers the curated contract and also uses supporting sources not listed in it: {', '.join(extra_sources)}."
+        if planned_sources and sql_sources:
+            return "Primary SQL reads align with the curated topic source contract."
+        return "Topic source coverage could not be fully confirmed from the checked-in contract and SQL metadata."
+    return "No additional review note was generated."
 
 
 def audit_asset(asset, tables):
@@ -526,10 +578,38 @@ def main():
             priority = "medium"
         else:
             priority = "low"
+        review_checks = []
+        grouped_suggestions = collections.defaultdict(list)
+        for entry in suggestions:
+            grouped_suggestions[entry["check"]].append(entry["note"])
+        for check in sorted(CHECKS):
+            if grouped_suggestions[check]:
+                note = " ".join(grouped_suggestions[check])
+                kind = "issue"
+            else:
+                note = default_review_note(
+                    check,
+                    text=sql_text if audit else "",
+                    event_based=event_based,
+                    model=model,
+                    grain=grain,
+                    canonical_time=event_time,
+                    detected_event_time=detected_event_time,
+                    missing_sources=missing_sources,
+                    extra_sources=extra_sources,
+                    planned_sources=planned,
+                    sql_sources=sql_read,
+                )
+                kind = "pass"
+            review_checks.append({
+                "check": check,
+                "label": CHECKS[check],
+                "kind": kind,
+                "note": note,
+            })
+
         improved_sp = []
-        if suggestions:
-            improved_sp = [f"Check {entry['check']} — {entry['note']}" for entry in suggestions]
-        elif recommendations:
+        if recommendations:
             improved_sp = recommendations[:]
         elif findings:
             improved_sp = findings[:]
@@ -547,7 +627,7 @@ def main():
             "missing_sources": missing_sources, "extra_sources": extra_sources,
             "asset": procedure if audit else None, "author": audit.get("author") if audit else None,
             "evidence_tier": evidence_tier, "evidence_note": evidence_note, "findings": findings,
-            "recommendations": recommendations, "suggestions": suggestions, "improved_sp": improved_sp,
+            "recommendations": recommendations, "suggestions": suggestions, "review_checks": review_checks, "improved_sp": improved_sp,
             "query": query, "query_kind": query_kind,
         })
 
