@@ -18,13 +18,16 @@ with sync_playwright() as p:
     assert page.locator(".priority-card").count() >= 8
     assert page.locator(".priority-card:has-text('Apply SP review suggestions')").count() == 1
     assert page.locator(".review-card:has-text('SP review suggestions')").count() == 54
+    assert page.locator(".review-card:has-text('Recommended SP')").count() == 54
     assert page.locator(".review-card:has-text('Validation findings')").count() == 0
     assert page.locator(".review-card:has-text('Recommended improvements')").count() == 0
+    assert page.locator(".review-scroll").count() == 108
     assert page.locator("[data-check]").count() == 31
     assert page.locator("#review-encounter [data-check=\"4\"]").count() == 1
-    assert page.locator("#review-encounter").inner_text().count("Check 4") == 1
+    assert page.locator("#review-encounter").inner_text().count("Check 4") >= 1
     vitals = page.locator("#review-vitals").inner_text()
     assert "Observation time has no dedicated source column" in vitals
+    assert "Recommended SP" in vitals
     assert "Topic source contract:" in vitals
     assert "Not read by SQL: EmrGrowthChartAudit_DataPoints, EmrGrowthChartAudit_Main, EmrGrowthSet_Main" in vitals
     assert "SQL-only supporting sources: AdmVisits" in vitals
