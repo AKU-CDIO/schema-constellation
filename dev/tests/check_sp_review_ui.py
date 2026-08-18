@@ -41,7 +41,7 @@ with sync_playwright() as p:
     assert "Topic source contract is not fully covered by the primary SQL; missing reads: EmrPat_ExtAllergyMain." in allergies
     surgery_review = page.locator("#review-surgery").inner_text()
     assert "Check 5" in surgery_review
-    assert "Primary SQL reads align with the curated topic source contract." in surgery_review
+    assert "Primary SQL reads align with the curated topic source contract: SurCase_Main, SurCase_ActualProcs, SurCase_ActualProcSurgTimes, SurCase_Implant, CwsAppt_Main." in surgery_review
     assert page.locator("#rvTotal").inner_text() == "54"
     assert page.locator("#rvImplemented").inner_text() == "54"
     assert page.locator("#rvShared").inner_text() == "0"

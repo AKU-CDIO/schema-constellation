@@ -26,6 +26,9 @@
 .review-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.review-columns h3{font-size:.78rem;margin:0 0 .35rem}.review-columns ul{margin:.2rem 0 0;padding-left:1.15rem;color:var(--muted);font-size:.8rem;line-height:1.5}.review-columns .ok{color:#047857}.review-source{font-size:.77rem;color:var(--muted);margin-top:.65rem;line-height:1.5}.review-source b{color:var(--ink)}
 .review-panel{border:1px solid var(--line);border-radius:10px;padding:.75rem;background:rgba(248,250,252,.68)}
 .review-scroll{max-height:250px;overflow:auto;padding-right:.25rem}
+.review-scroll li[data-kind]{margin:.35rem 0;padding:.45rem .55rem;border-radius:8px;list-style-position:outside}
+.review-scroll li[data-kind="pass"]{color:#1f7a3a;background:rgba(34,139,34,.08);border:1px solid rgba(34,139,34,.18)}
+.review-scroll li[data-kind="issue"]{color:#8f2d2d;background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.14)}
 .review-scroll.sql{max-height:420px}
 .review-scroll pre{margin:0}
 .review-scroll code{display:block;white-space:pre;overflow:auto;font-size:.72rem;line-height:1.45}
