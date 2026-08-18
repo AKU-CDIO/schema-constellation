@@ -16,6 +16,7 @@ import io
 import json
 import os
 import re
+from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_PATH = os.path.join(ROOT, "data", "schema.js")
@@ -59,16 +60,54 @@ def parse_procedure_name(text, fallback):
     return match.group(1) if match else fallback
 
 
+def normalize_proc_name(value):
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
 def parse_author(text):
     match = re.search(r"(?im)^[\s/*-]*Author\b\s*:?\s*([^\r\n*]+)", text)
     return match.group(1).strip().rstrip("*/ ") if match else None
 
 
-def resolve_sql_path(filename):
-    preferred = os.path.join(PREFERRED_SQL_DIR, filename)
-    if os.path.isfile(preferred):
-        return preferred
-    return os.path.join(SQL_DIR, filename)
+def read_sql_file(path):
+    raw = Path(path).read_bytes()
+    for encoding in ("utf-8-sig", "utf-16", "utf-16-le", "cp1252"):
+        try:
+            return raw.decode(encoding).replace("\r\n", "\n")
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace").replace("\r\n", "\n")
+
+
+def build_preferred_sql_index():
+    index = {}
+    if not os.path.isdir(PREFERRED_SQL_DIR):
+        return index
+    for path in glob.glob(os.path.join(PREFERRED_SQL_DIR, "**", "*.sql"), recursive=True):
+        try:
+            text = read_sql_file(path)
+        except OSError:
+            continue
+        filename = os.path.basename(path)
+        stem = os.path.splitext(filename)[0]
+        proc_name = parse_procedure_name(text, stem)
+        entry = {"path": path, "sql": text.replace("\r\n", "\n"), "filename": filename, "stem": stem, "proc_name": proc_name}
+        for key in {normalize_proc_name(stem), normalize_proc_name(filename), normalize_proc_name(proc_name)}:
+            if key and key not in index:
+                index[key] = entry
+    return index
+
+
+def resolve_sql_asset(path, preferred_index):
+    filename = os.path.basename(path)
+    stem = os.path.splitext(filename)[0]
+    repo_sql = read_sql_file(path)
+    repo_proc = parse_procedure_name(repo_sql, stem)
+    for key in (normalize_proc_name(repo_proc), normalize_proc_name(stem), normalize_proc_name(filename)):
+        preferred = preferred_index.get(key)
+        if preferred:
+            return preferred["path"], preferred["sql"], preferred["proc_name"]
+    return path, repo_sql, repo_proc
 
 
 def extract_joins(text, tables, asset_id):
@@ -371,21 +410,20 @@ def build_query(topic, context, tables):
 def main():
     schema = load_js(SCHEMA_PATH, "SCHEMA_DATA")
     phases = load_js(PHASES_PATH, "SCHEMA_PHASES")
+    preferred_index = build_preferred_sql_index()
     tables, assets = schema["tables"], {}
     for path in sorted(glob.glob(os.path.join(SQL_DIR, "*.sql"))):
         filename = os.path.basename(path)
         asset_id = os.path.splitext(filename)[0]
-        resolved_path = resolve_sql_path(filename)
-        sql = io.open(resolved_path, encoding="utf-8-sig", errors="replace").read().replace("\r\n", "\n")
+        resolved_path, sql, resolved_proc = resolve_sql_asset(path, preferred_index)
         author = parse_author(sql)
         if author is None and resolved_path != path:
-            fallback_sql = io.open(path, encoding="utf-8-sig", errors="replace").read().replace("\r\n", "\n")
-            author = parse_author(fallback_sql)
+            author = parse_author(read_sql_file(path))
         if author is None:
             author = "test"
         assets[asset_id] = {
             "id": asset_id,
-            "name": parse_procedure_name(sql, asset_id),
+            "name": resolved_proc,
             "file": filename,
             "source_preference": "sps" if resolved_path != path else "repo",
             "author": author,

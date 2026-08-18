@@ -35,15 +35,16 @@ with sync_playwright() as p:
     assert "SQL-only supporting sources: AdmVisits" in vitals
     vitals_sql = page.locator("#review-vitals .review-panel:nth-of-type(2) code").inner_text()
     assert "usp_Build_FCAP1A_Flowsheets_Extended" in vitals_sql
-    assert "ObservationSourceRowID" in vitals_sql
-    assert "ObservationDateTime" in vitals_sql
+    assert "PhaPatData" in vitals_sql
+    assert "AdmVitalSigns" in vitals_sql
+    assert "ErTriageDateTime" in vitals_sql
     allergies = page.locator("#review-allergies").inner_text()
     assert "Check 5" in allergies
     assert "Topic source contract is not fully covered by the primary SQL; missing reads: EmrPat_ExtAllergyMain." in allergies
     assert "Check 6" in allergies
     surgery_review = page.locator("#review-surgery").inner_text()
     assert "Check 5" in surgery_review
-    assert "Primary SQL reads align with the curated topic source contract: SurCase_Main, SurCase_ActualProcs, SurCase_ActualProcSurgTimes, SurCase_Implant, CwsAppt_Main." in surgery_review
+    assert "Topic source contract is only partially covered: SQL does not read SurCase_ActualProcSurgTimes, SurCase_ActualProcs, SurCase_Implant, and it also depends on supporting sources not listed in the contract" in surgery_review
     claims = page.locator("#review-claims").inner_text()
     assert "Check 6" in claims
     assert "Birthdate -> tbl_FCAP1A_Demographics_Extended.Birthdate" in claims

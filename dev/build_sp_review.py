@@ -8,6 +8,8 @@ import io
 import json
 import os
 import re
+import glob
+from pathlib import Path
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -197,19 +199,64 @@ CURATED_SUGGESTIONS = {
 
 def load_sql_text(asset):
     path = resolve_sql_path(asset["file"])
-    return io.open(path, encoding="utf-8-sig", errors="replace").read()
+    return read_sql_file(path)
 
 
-def resolve_sql_path(filename):
-    preferred = os.path.join(PREFERRED_SQL_DIR, filename)
-    if os.path.isfile(preferred):
-        return preferred
-    return os.path.join(SQL_DIR, filename)
+def normalize_proc_name(value):
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
 
 
 def parse_author(text):
     match = re.search(r"(?im)^[\s/*-]*Author\b\s*:?\s*([^\r\n*]+)", text)
     return match.group(1).strip().rstrip("*/ ") if match else None
+
+
+def read_sql_file(path):
+    raw = Path(path).read_bytes()
+    for encoding in ("utf-8-sig", "utf-16", "utf-16-le", "cp1252"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def parse_procedure_name(text, fallback):
+    match = re.search(r"(?:CREATE\s+OR\s+ALTER|CREATE|ALTER)\s+PROCEDURE\s+(?:\[?dbo\]?\.)?\[?([A-Za-z0-9_]+)\]?", text, re.I)
+    return match.group(1) if match else fallback
+
+
+def build_preferred_sql_index():
+    index = {}
+    if not os.path.isdir(PREFERRED_SQL_DIR):
+        return index
+    for path in glob.glob(os.path.join(PREFERRED_SQL_DIR, "**", "*.sql"), recursive=True):
+        try:
+            text = read_sql_file(path)
+        except OSError:
+            continue
+        filename = os.path.basename(path)
+        stem = os.path.splitext(filename)[0]
+        proc_name = parse_procedure_name(text, stem)
+        entry = {"path": path, "sql": text, "filename": filename, "stem": stem, "proc_name": proc_name}
+        for key in {normalize_proc_name(stem), normalize_proc_name(filename), normalize_proc_name(proc_name)}:
+            if key and key not in index:
+                index[key] = entry
+    return index
+
+
+PREFERRED_SQL_INDEX = build_preferred_sql_index()
+
+
+def resolve_sql_path(filename):
+    repo_path = os.path.join(SQL_DIR, filename)
+    repo_sql = read_sql_file(repo_path)
+    repo_proc = parse_procedure_name(repo_sql, os.path.splitext(filename)[0])
+    for key in (normalize_proc_name(repo_proc), normalize_proc_name(os.path.splitext(filename)[0]), normalize_proc_name(filename)):
+        preferred = PREFERRED_SQL_INDEX.get(key)
+        if preferred:
+            return preferred["path"]
+    return repo_path
 
 
 def proc_header(text):
@@ -455,11 +502,11 @@ def base_overlap_suggestion(output, tables):
 
 def audit_asset(asset, tables):
     path = resolve_sql_path(asset["file"])
-    text = io.open(path, encoding="utf-8-sig", errors="replace").read()
+    text = read_sql_file(path)
     declaration, proc_name, params = proc_header(text)
     author = parse_author(text)
     if author is None and path != os.path.join(SQL_DIR, asset["file"]):
-        fallback_text = io.open(os.path.join(SQL_DIR, asset["file"]), encoding="utf-8-sig", errors="replace").read()
+        fallback_text = read_sql_file(os.path.join(SQL_DIR, asset["file"]))
         author = parse_author(fallback_text)
     if author is None:
         author = "test"
