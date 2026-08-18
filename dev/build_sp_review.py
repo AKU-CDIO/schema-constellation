@@ -360,6 +360,14 @@ def col_names(table):
     return [col.get("n") for col in (table or {}).get("cols", []) if isinstance(col, dict)]
 
 
+def is_time_like_column(name):
+    parts = re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+", name or "")
+    joined = "".join(parts).lower()
+    if joined.endswith("datetime") or joined.endswith("timestamp"):
+        return True
+    return bool(parts) and parts[-1].lower() in {"date", "time"}
+
+
 def validation_query(topic, table, planned_tables, schema_tables, event_based, desired_time, status):
     output = table.get("output")
     out_table = schema_tables.get(output, {})
@@ -370,7 +378,7 @@ def validation_query(topic, table, planned_tables, schema_tables, event_based, d
             metrics.append("COUNT(DISTINCT PatientID) AS Patients")
         if "VisitID" in cols:
             metrics.append("COUNT(DISTINCT VisitID) AS Visits")
-        time_cols = [name for name in cols if re.search(r"date|time|timestamp", name, re.I) and name.lower() not in {"extractedon", "rowupdatedatetime"}]
+        time_cols = [name for name in cols if is_time_like_column(name) and name.lower() not in {"extractedon", "rowupdatedatetime"}]
         event_col = next((name for name in time_cols if name.lower() == desired_time.lower()), time_cols[0] if time_cols else None)
         if event_col:
             metrics.extend([f"SUM(CASE WHEN [{event_col}] IS NULL THEN 1 ELSE 0 END) AS MissingEventTime", f"MIN([{event_col}]) AS FirstEvent", f"MAX([{event_col}]) AS LastEvent"])
@@ -518,6 +526,16 @@ def main():
             priority = "medium"
         else:
             priority = "low"
+        improved_sp = []
+        if suggestions:
+            improved_sp = [f"Check {entry['check']} — {entry['note']}" for entry in suggestions]
+        elif recommendations:
+            improved_sp = recommendations[:]
+        elif findings:
+            improved_sp = findings[:]
+        else:
+            improved_sp = ["Maintain the current stored procedure contract and rerun the regression checks after source or schema changes."]
+
         reviews.append({
             "id": topic["id"], "name": topic["name"], "phase": phase["name"], "phase_id": phase["id"],
             "category": topic["cat"], "availability": topic["avail"], "description": topic["desc"],
@@ -529,7 +547,7 @@ def main():
             "missing_sources": missing_sources, "extra_sources": extra_sources,
             "asset": procedure if audit else None, "author": audit.get("author") if audit else None,
             "evidence_tier": evidence_tier, "evidence_note": evidence_note, "findings": findings,
-            "recommendations": recommendations, "suggestions": suggestions,
+            "recommendations": recommendations, "suggestions": suggestions, "improved_sp": improved_sp,
             "query": query, "query_kind": query_kind,
         })
 
