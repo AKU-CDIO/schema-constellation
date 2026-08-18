@@ -22,12 +22,13 @@ with sync_playwright() as p:
     assert page.locator(".review-card:has-text('Validation findings')").count() == 0
     assert page.locator(".review-card:has-text('Recommended improvements')").count() == 0
     assert page.locator(".review-scroll").count() == 108
-    assert page.locator("[data-check]").count() == 270
+    assert page.locator("[data-check]").count() == 324
     assert page.locator("#review-encounter [data-check=\"4\"]").count() == 1
     assert page.locator("#review-encounter").inner_text().count("Check 4") >= 1
     vitals = page.locator("#review-vitals").inner_text()
     assert "Observation time has no dedicated source column" in vitals
     assert "Check 5" in vitals
+    assert "Check 6" in vitals
     assert "Recommended SP" in vitals
     assert "Topic source contract:" in vitals
     assert "Not read by SQL: EmrGrowthChartAudit_DataPoints, EmrGrowthChartAudit_Main, EmrGrowthSet_Main" in vitals
@@ -39,9 +40,14 @@ with sync_playwright() as p:
     allergies = page.locator("#review-allergies").inner_text()
     assert "Check 5" in allergies
     assert "Topic source contract is not fully covered by the primary SQL; missing reads: EmrPat_ExtAllergyMain." in allergies
+    assert "Check 6" in allergies
     surgery_review = page.locator("#review-surgery").inner_text()
     assert "Check 5" in surgery_review
     assert "Primary SQL reads align with the curated topic source contract: SurCase_Main, SurCase_ActualProcs, SurCase_ActualProcSurgTimes, SurCase_Implant, CwsAppt_Main." in surgery_review
+    claims = page.locator("#review-claims").inner_text()
+    assert "Check 6" in claims
+    assert "Birthdate -> tbl_FCAP1A_Demographics_Extended.Birthdate" in claims
+    assert "FacilityID -> tbl_FCAP1A_Encounters_Extended.FacilityID" in claims
     assert page.locator("#rvTotal").inner_text() == "54"
     assert page.locator("#rvImplemented").inner_text() == "54"
     assert page.locator("#rvShared").inner_text() == "0"

@@ -21,6 +21,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA_PATH = os.path.join(ROOT, "data", "schema.js")
 PHASES_PATH = os.path.join(ROOT, "data", "phases.js")
 SQL_DIR = os.path.join(ROOT, "dev", "fcap1a_utf8")
+PREFERRED_SQL_DIR = os.environ.get(
+    "FCAP1A_PREFERRED_SQL_DIR",
+    r"C:\Users\derick.imbati\OneDrive - Aga Khan University\Documents\MasterPiece\MAYO\Cohort_Data_Sets\sps",
+)
 OUT_PATH = os.path.join(ROOT, "data", "sp_source.js")
 
 KEY_ORDER = ["SourceID", "PatientID", "VisitID"]
@@ -53,6 +57,18 @@ EQUALITY_RE = re.compile(
 def parse_procedure_name(text, fallback):
     match = re.search(r"(?:CREATE\s+OR\s+ALTER|CREATE|ALTER)\s+PROCEDURE\s+(?:\[?dbo\]?\.)?\[?([A-Za-z0-9_]+)\]?", text, re.I)
     return match.group(1) if match else fallback
+
+
+def parse_author(text):
+    match = re.search(r"(?im)^[\s/*-]*Author\b\s*:?\s*([^\r\n*]+)", text)
+    return match.group(1).strip().rstrip("*/ ") if match else None
+
+
+def resolve_sql_path(filename):
+    preferred = os.path.join(PREFERRED_SQL_DIR, filename)
+    if os.path.isfile(preferred):
+        return preferred
+    return os.path.join(SQL_DIR, filename)
 
 
 def extract_joins(text, tables, asset_id):
@@ -359,8 +375,23 @@ def main():
     for path in sorted(glob.glob(os.path.join(SQL_DIR, "*.sql"))):
         filename = os.path.basename(path)
         asset_id = os.path.splitext(filename)[0]
-        sql = io.open(path, encoding="utf-8-sig", errors="replace").read().replace("\r\n", "\n")
-        assets[asset_id] = {"id": asset_id, "name": parse_procedure_name(sql, asset_id), "file": filename, "sql": sql, "joins": extract_joins(sql, tables, asset_id)}
+        resolved_path = resolve_sql_path(filename)
+        sql = io.open(resolved_path, encoding="utf-8-sig", errors="replace").read().replace("\r\n", "\n")
+        author = parse_author(sql)
+        if author is None and resolved_path != path:
+            fallback_sql = io.open(path, encoding="utf-8-sig", errors="replace").read().replace("\r\n", "\n")
+            author = parse_author(fallback_sql)
+        if author is None:
+            author = "test"
+        assets[asset_id] = {
+            "id": asset_id,
+            "name": parse_procedure_name(sql, asset_id),
+            "file": filename,
+            "source_file": resolved_path,
+            "author": author,
+            "sql": sql,
+            "joins": extract_joins(sql, tables, asset_id),
+        }
     topics = {}
     for topic in [topic for phase in phases["phases"] for topic in phase["topics"]]:
         context = topic_context(topic, tables, schema.get("rels", []), assets)

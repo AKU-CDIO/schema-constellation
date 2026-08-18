@@ -546,6 +546,7 @@ function spSectionHTML(p){
     ? joinRels.map(r => `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl" style="font-size:11.5px">${esc(r.from)}</span><span class="qs-arr">-&gt;</span><span class="qs-tbl" style="font-size:11.5px">${esc(r.to)}</span><span class="qs-on">on ${esc(stripSid(r.on))} | ${esc(r.card)} | ${esc(r.evidence || "curated")}</span></div>`).join("")
     : `<div class="qstep" style="padding:7px 10px"><span class="qs-tbl">No validated join</span><span class="qs-on">review source evidence before production use</span></div>`;
   const sourceAssets = ((p.item.sp && p.item.sp.assets) || []).map(id => (SPSOURCE.assets || {})[id]).filter(Boolean);
+  const primaryAuthor = sourceAssets.find(asset => asset.author)?.author || "Not declared";
   const procedures = sourceAssets.length
     ? sourceAssets.map((asset, index) => `<details class="sp-source" ${index === 0 ? "open" : ""}>
         <summary>${index === 0 ? "Stored procedure" : "Supporting procedure"} - ${esc(asset.name)}</summary>
@@ -560,7 +561,7 @@ function spSectionHTML(p){
         <span class="chip" style="background:${color}1a;border-color:${color}55;color:${color}">${esc(p.plan)}</span>
         <span class="chip ${p.item.sp.status === "implemented" ? "pk" : "ext"}">${esc((p.item.sp.status || "blueprint").toUpperCase())}</span>
       </h3>
-      <div class="dl" style="margin-top:6px">Output: <b>CDIO_MeditechDB.dbo.${esc(p.out)}</b> | ${p.members.length} source tables | Author: <b>test</b></div>
+      <div class="dl" style="margin-top:6px">Output: <b>CDIO_MeditechDB.dbo.${esc(p.out)}</b> | ${p.members.length} source tables | Author: <b>${esc(primaryAuthor)}</b></div>
       <div class="sqlbox" style="margin-top:10px"><div style="display:flex;flex-wrap:wrap;gap:5px">${tables}</div></div>
       <div class="sec" style="margin-top:14px"><h3>Topic assembly query</h3>
         <div class="badges" style="margin:0 0 8px"><span class="chip pk">read only</span><span class="chip ext">${joinRels.length} evidence-backed links</span></div>

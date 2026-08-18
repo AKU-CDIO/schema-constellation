@@ -38,10 +38,10 @@ for item in topics:
     assert "undefined" not in item["query"].lower()
     assert item["improved_sp"], item["id"]
     for suggestion in item["suggestions"]:
-        assert suggestion["check"] in {1, 2, 3, 4}, (item["id"], suggestion)
+        assert suggestion["check"] in {1, 2, 3, 4, 6}, (item["id"], suggestion)
         assert suggestion["note"], (item["id"], suggestion)
-    assert len(item["review_checks"]) == 5, item["id"]
-    assert {check["check"] for check in item["review_checks"]} == {1, 2, 3, 4, 5}, item["id"]
+    assert len(item["review_checks"]) == 6, item["id"]
+    assert {check["check"] for check in item["review_checks"]} == {1, 2, 3, 4, 5, 6}, item["id"]
     assert all(check["label"] for check in item["review_checks"]), item["id"]
     assert all(check["note"] for check in item["review_checks"]), item["id"]
     if item["status"] in {"implemented", "shared"}:
@@ -58,15 +58,15 @@ assert summary["topics"] == 54
 assert summary["primary_implemented_procedures"] == 54
 assert summary["planned_source_gap_topics"] == 12
 assert summary["planned_source_gap_references"] == 31
-assert summary["alter_only_primary"] == 14
+assert summary["alter_only_primary"] == 13
 assert summary["drop_publish_primary"] == 22
 assert summary["try_catch_primary"] == 53
-assert summary["xact_abort_primary"] == 34
+assert summary["xact_abort_primary"] == 35
 assert summary["transaction_primary"] == 33
 assert summary["parameterized_primary"] == 33
 assert summary["indexed_primary"] == 38
-assert summary["topics_with_suggestions"] == 15
-assert summary["suggestion_count"] == 31
+assert summary["topics_with_suggestions"] == 45
+assert summary["suggestion_count"] == 65
 assert len(review["priorities"]) >= 8
 
 asset_ids = {asset["id"] for asset in schema["procedures"]}

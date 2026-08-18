@@ -44,7 +44,8 @@ for topic in topics:
     for asset_id in topic["sp"]["assets"]:
         asset = source["assets"].get(asset_id)
         assert asset, f"missing SQL asset: {topic['id']} / {asset_id}"
-        assert re.search(r"Author\s*:\s*test", asset["sql"], re.I), f"missing author test: {asset_id}"
+        assert asset.get("author") == "test", f"missing normalized author: {asset_id}"
+        assert asset.get("source_file"), f"missing source file path: {asset_id}"
     primary = source["assets"][topic["sp"]["assets"][0]]["sql"]
     assert re.search(r"(?:CREATE(?:\s+OR\s+ALTER)?|ALTER)\s+(?:PROCEDURE|PROC)\b", primary, re.I), f"missing procedure declaration: {topic['id']}"
 

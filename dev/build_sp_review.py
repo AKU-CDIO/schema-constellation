@@ -14,6 +14,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = os.path.join(ROOT, "data", "schema.js")
 PHASES = os.path.join(ROOT, "data", "phases.js")
 SQL_DIR = os.path.join(ROOT, "dev", "fcap1a_utf8")
+PREFERRED_SQL_DIR = os.environ.get(
+    "FCAP1A_PREFERRED_SQL_DIR",
+    r"C:\Users\derick.imbati\OneDrive - Aga Khan University\Documents\MasterPiece\MAYO\Cohort_Data_Sets\sps",
+)
 OUT = os.path.join(ROOT, "data", "sp_review.js")
 
 
@@ -192,8 +196,20 @@ CURATED_SUGGESTIONS = {
 
 
 def load_sql_text(asset):
-    path = os.path.join(SQL_DIR, asset["file"])
+    path = resolve_sql_path(asset["file"])
     return io.open(path, encoding="utf-8-sig", errors="replace").read()
+
+
+def resolve_sql_path(filename):
+    preferred = os.path.join(PREFERRED_SQL_DIR, filename)
+    if os.path.isfile(preferred):
+        return preferred
+    return os.path.join(SQL_DIR, filename)
+
+
+def parse_author(text):
+    match = re.search(r"(?im)^[\s/*-]*Author\b\s*:?\s*([^\r\n*]+)", text)
+    return match.group(1).strip().rstrip("*/ ") if match else None
 
 
 def proc_header(text):
@@ -223,7 +239,13 @@ CHECKS = {
     3: "Completeness (columns, rows, WHERE filters)",
     4: "Join correctness, duplication/dropped-record risk, SourceID removal from joins",
     5: "Topic source contract coverage",
+    6: "Duplicate base-column / PII minimization",
 }
+
+BASE_DEMOGRAPHICS_OUTPUT = "tbl_FCAP1A_Demographics_Extended"
+BASE_ENCOUNTERS_OUTPUT = "tbl_FCAP1A_Encounters_Extended"
+BASE_OVERLAP_IGNORE = {"PatientID", "VisitID", "SourceID", "ExtractedOn", "RowUpdateDateTime", "ExtractedFrom"}
+DEMOGRAPHIC_ALIAS_MAP = {"Name": "FullName"}
 
 
 def window_bounds(text):
@@ -333,7 +355,7 @@ def short_time_columns(text):
 
 def default_review_note(check, *, text, event_based, model, grain, canonical_time,
                         detected_event_time, missing_sources, extra_sources,
-                        planned_sources, sql_sources):
+                        planned_sources, sql_sources, output, tables):
     source_tables = format_table_list(sql_sources)
     contract_tables = format_table_list(planned_sources)
     window_cols = ", ".join(short_time_columns(text))
@@ -378,15 +400,69 @@ def default_review_note(check, *, text, event_based, model, grain, canonical_tim
         if planned_sources and sql_sources:
             return f"Primary SQL reads align with the curated topic source contract: {contract_tables}."
         return "Topic source coverage could not be fully confirmed from the checked-in contract and SQL metadata."
+    if check == 6:
+        if output == BASE_DEMOGRAPHICS_OUTPUT:
+            return "This is the canonical patient-identity base output. Keep patient demographics and direct identity attributes here, and trim them out of downstream topic outputs instead of duplicating them."
+        if output == BASE_ENCOUNTERS_OUTPUT:
+            return "This is the canonical visit-context base output. Keep encounter timing, facility, location, and registration context here, and let downstream topic outputs join back to it when needed."
+        overlap = base_overlap_suggestion(output, tables)
+        if overlap:
+            return overlap["note"]
+        return f"No duplicated Demographics- or Encounters-owned base columns were detected in dbo.{output} beyond the normal key and lineage fields."
     return "No additional review note was generated."
 
 
+def base_overlap_suggestion(output, tables):
+    if output not in tables:
+        return None
+    if output in {BASE_DEMOGRAPHICS_OUTPUT, BASE_ENCOUNTERS_OUTPUT}:
+        return None
+    if BASE_DEMOGRAPHICS_OUTPUT not in tables or BASE_ENCOUNTERS_OUTPUT not in tables:
+        return None
+    cols = col_names(tables.get(output, {}))
+    if not cols:
+        return None
+    demo_cols = set(col_names(tables[BASE_DEMOGRAPHICS_OUTPUT]))
+    encounter_cols = set(col_names(tables[BASE_ENCOUNTERS_OUTPUT]))
+    demo_overlap = [col for col in cols if col in demo_cols and col not in BASE_OVERLAP_IGNORE]
+    encounter_overlap = [col for col in cols if col in encounter_cols and col not in BASE_OVERLAP_IGNORE]
+    alias_overlap = []
+    for col, base_col in DEMOGRAPHIC_ALIAS_MAP.items():
+        if col in cols and base_col in demo_cols:
+            alias_overlap.append((col, base_col))
+    if not demo_overlap and not encounter_overlap and not alias_overlap:
+        return None
+    notes = []
+    if demo_overlap or alias_overlap:
+        owned = [f"{col} -> {BASE_DEMOGRAPHICS_OUTPUT}.{base_col}" for col, base_col in alias_overlap]
+        owned.extend(f"{col} -> {BASE_DEMOGRAPHICS_OUTPUT}.{col}" for col in demo_overlap)
+        notes.append(
+            "Patient identity columns already belong in the Demographics base output: "
+            + ", ".join(owned[:12])
+            + "."
+        )
+    if encounter_overlap:
+        notes.append(
+            "Visit-context columns already belong in the Encounters base output: "
+            + ", ".join(f"{col} -> {BASE_ENCOUNTERS_OUTPUT}.{col}" for col in encounter_overlap[:12])
+            + "."
+        )
+    notes.append(
+        f"Recommend dropping these columns from dbo.{output} and joining back to {BASE_DEMOGRAPHICS_OUTPUT} on PatientID and {BASE_ENCOUNTERS_OUTPUT} on PatientID + VisitID only when downstream consumers explicitly need them."
+    )
+    return {"check": 6, "note": " ".join(notes)}
+
+
 def audit_asset(asset, tables):
-    path = os.path.join(SQL_DIR, asset["file"])
+    path = resolve_sql_path(asset["file"])
     text = io.open(path, encoding="utf-8-sig", errors="replace").read()
     declaration, proc_name, params = proc_header(text)
-    author_match = re.search(r"Author\s*:?\s*([^\r\n*]+)", text, re.I)
-    author = author_match.group(1).strip().rstrip("*/ ") if author_match else None
+    author = parse_author(text)
+    if author is None and path != os.path.join(SQL_DIR, asset["file"]):
+        fallback_text = io.open(os.path.join(SQL_DIR, asset["file"]), encoding="utf-8-sig", errors="replace").read()
+        author = parse_author(fallback_text)
+    if author is None:
+        author = "test"
     flags = {
         "declaration": declaration, "author": author,
         "procedure": proc_name,
@@ -587,6 +663,9 @@ def main():
                 if any(s_tokens and len(s_tokens & {w for w in e["note"].split() if len(w) > 3 and w not in ("predicate", "window", "the", "that", "with", "from", "this", "and", "for")}) >= 0.6 * max(len(s_tokens), 1) for e in suggestions):
                     continue
                 suggestions.append(s)
+        overlap_suggestion = base_overlap_suggestion(output, tables)
+        if overlap_suggestion:
+            suggestions.append(overlap_suggestion)
 
         recommendations = list(dict.fromkeys(recommendations))
         if status in {"source-gap", "blueprint"} or (audit and not audit["try_catch"]) or len(missing_sources) >= 3:
@@ -616,6 +695,8 @@ def main():
                     extra_sources=extra_sources,
                     planned_sources=planned,
                     sql_sources=sql_read,
+                    output=output,
+                    tables=tables,
                 )
                 kind = "pass"
             review_checks.append({
@@ -666,7 +747,7 @@ def main():
         "suggestion_count": sum(len(r["suggestions"]) for r in reviews),
     }
     priorities = [
-        {"priority": "medium", "title": "Apply SP review suggestions", "detail": f"{summary['topics_with_suggestions']} of {len(reviews)} implemented topics have {summary['suggestion_count']} actionable review suggestions across the four review checks (event handling, event-date selection, completeness, join correctness / SourceID removal)."}] + [
+        {"priority": "medium", "title": "Apply SP review suggestions", "detail": f"{summary['topics_with_suggestions']} of {len(reviews)} implemented topics have {summary['suggestion_count']} actionable review suggestions across the six review checks (event handling, event-date selection, completeness, join correctness / SourceID removal, source-contract coverage, and duplicate base-column minimization)."}] + [
         {"priority": "high" if status_counts["source-gap"] + status_counts["blueprint"] else "low", "title": "Dedicated procedure coverage", "detail": f"{len(reviews) - status_counts['source-gap'] - status_counts['blueprint']} of {len(reviews)} topics now have checked-in procedures; partial and external evidence tiers remain clearly labelled."},
         {"priority": "high", "title": "Reconcile source-to-SQL coverage", "detail": f"{missing_source_topics} implemented/shared topics list {missing_source_refs} planned source references that their primary SQL does not read."},
         {"priority": "high", "title": "Make publication atomic", "detail": f"All {summary['drop_publish_primary']} implemented primary procedures use DROP/CREATE publication; use staged tables plus a short transactional swap."},
