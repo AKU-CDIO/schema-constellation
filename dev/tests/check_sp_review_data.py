@@ -58,15 +58,15 @@ assert summary["topics"] == 54
 assert summary["primary_implemented_procedures"] == 54
 assert summary["planned_source_gap_topics"] == 12
 assert summary["planned_source_gap_references"] == 33
-assert summary["alter_only_primary"] == 20
-assert summary["drop_publish_primary"] == 23
+assert summary["alter_only_primary"] == 21
+assert summary["drop_publish_primary"] == 24
 assert summary["try_catch_primary"] == 53
-assert summary["xact_abort_primary"] == 33
-assert summary["transaction_primary"] == 32
-assert summary["parameterized_primary"] == 32
-assert summary["indexed_primary"] == 36
+assert summary["xact_abort_primary"] == 32
+assert summary["transaction_primary"] == 31
+assert summary["parameterized_primary"] == 31
+assert summary["indexed_primary"] == 35
 assert summary["topics_with_suggestions"] == 45
-assert summary["suggestion_count"] == 65
+assert summary["suggestion_count"] == 66
 assert len(review["priorities"]) >= 8
 
 asset_ids = {asset["id"] for asset in schema["procedures"]}

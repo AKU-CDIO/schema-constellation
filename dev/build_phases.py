@@ -186,9 +186,9 @@ PHASES = [
          "Yes", "Covered by the Medications build (sp_FCAP1A_Medications) — the order tables are planned under that SP.", "FCAP1A_Medications_Extended",
          ["PhaRx", "PhaRxMedications", "DPhaDrugData", "OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"]),
         ("procorders", "Procedure Orders",
-         "Procedure/order entry: order headers, categories, groups and the CPT dictionary.",
-         "Yes", "Covered by the Orders build (sp_FCAP1A_Orders) — the procedure-order tables are planned under that SP.", "FCAP1A_Orders",
-         ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "OmCat_Main", "OmGrp_Main", "MisCpt_Main"]),
+         "Order-level procedure-entry output using the local extended orders build: order headers, dictionary, category, group, CPT, and encounter context, with classification available to separate procedure from medication orders.",
+         "Yes", "Rendered from the local usp_Build_FCAP1A_Orders_Extended.sql review source; production publication should restrict the final insert to OrderClass = 'Procedure order'.", "FCAP1A_Orders_Extended",
+         ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "OmCat_Main", "OmGrp_Main", "MisCpt_Main", "RegAcct_Main", "HimRec_Main"]),
         ("claims", "Claims Data",
          "Insurance claims and claim lines: claim headers, versions and per-line transactions/bill detail, with the payer, claim-format, facility and business-unit dictionaries.",
          "Yes", None, "FCAP1A_ClaimsData",
@@ -366,7 +366,7 @@ REMAINING_OVERRIDES = {
     "problemlist": {"sp": "FCAP1A_ProblemList", "tables": ["EmrPat_Problems", "EmrPat_ProblemsMain", "MisPatProblem_Main"], "note": "Dedicated active, pending, office, and health-concern problem output."},
     "appointments": {"sp": "FCAP1A_Appointments", "tables": ["CwsAppt_Main", "CwsAppt_AuditTrail", "CwsAppt_Resources"], "note": "Appointment header, status, arrival, comments, resources, participants, and audit history."},
     "medorders": {"sp": "FCAP1A_MedicationOrders", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Dedicated medication-order output separated from administrations."},
-    "procorders": {"sp": "FCAP1A_ProcedureOrders", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main"], "note": "Dedicated non-medication procedure-order output."},
+    "procorders": {"sp": "FCAP1A_Orders_Extended", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "OmCat_Main", "OmGrp_Main", "MisCpt_Main", "RegAcct_Main", "HimRec_Main"], "note": "Rendered from the local usp_Build_FCAP1A_Orders_Extended.sql review source; production publication should restrict the final insert to OrderClass = 'Procedure order'."},
     "ecgecho": {"sp": "FCAP1A_ECGAndEcho", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "EmrAcctRep_Images", "RegAcct_Main"], "note": "Relational order/report evidence; waveform and structured measurements require cardiology-system confirmation."},
     "infusions": {"sp": "FCAP1A_Infusions", "tables": ["PcsMarAct_MarLastDocumented", "PcsMarAct_MarLastTitration", "PcsMarAct_MarActivityTitr", "PcsMarAct_BagInfusionLastDoc", "PcsMarAct_MarMeds", "PcsMarAct_MarRxs", "RegAcct_Main"], "note": "Direct MAR infusion, titration, medication, rate, volume, dose, and bag evidence."},
     "pft": {"sp": "FCAP1A_PulmonaryFunctionTests", "tables": ["OmOrd_Main", "OmOrd_Main2", "OmOrd_Main3", "OmOrdDict_Main", "EmrAcctRep_Images", "RegAcct_Main"], "note": "PFT order/report evidence; structured spirometry measures are not present in the audited relational catalog."},
@@ -406,17 +406,21 @@ RELATED_ASSETS = {
     "pathology": ["usp_Build_FCAP1A_PathologyEHR_Extended"],
     "ppi": ["usp_Build_FCAP1A_PatientReferrals_Extended"],
 }
+PRIMARY_ASSET_OVERRIDES = {
+    "FCAP1A_Orders_Extended": "usp_Build_FCAP1A_ProcedureOrders",
+}
 
 
 def sp_plan(topic_id, sp_name):
     primary = "usp_Build_" + sp_name
+    primary_asset = PRIMARY_ASSET_OVERRIDES.get(sp_name, primary)
     assets = []
-    if primary in ASSET_BY_ID:
-        assets.append(primary)
+    if primary_asset in ASSET_BY_ID:
+        assets.append(primary_asset)
     for asset_id in RELATED_ASSETS.get(topic_id, []):
         if asset_id in ASSET_BY_ID and asset_id not in assets:
             assets.append(asset_id)
-    implemented = primary in ASSET_BY_ID
+    implemented = primary_asset in ASSET_BY_ID
     return {
         "name": sp_name,
         "out": pick_output(sp_name),

@@ -21,6 +21,9 @@ PREFERRED_SQL_DIR = os.environ.get(
     r"C:\Users\derick.imbati\OneDrive - Aga Khan University\Documents\MasterPiece\MAYO\Cohort_Data_Sets\sps",
 )
 OUT = os.path.join(ROOT, "data", "sp_review.js")
+ASSET_SQL_OVERRIDES = {
+    "usp_Build_FCAP1A_ProcedureOrders": "usp_Build_FCAP1A_Orders_Extended",
+}
 
 
 def load_js(path):
@@ -187,6 +190,10 @@ CURATED_SUGGESTIONS = {
         {"check": 2, "note": "Surgical-implant ImplantDateTime is mapped from CwsAppt_Main.DateTime (appointment time); confirm SurCase_Implant has no true implant date (ImplantManufacturedDate/ImplantsExpirationDate are dates but not the implant time)."},
         {"check": 3, "note": "No window predicate is applied on ImplantDateTime; the procedure builds the full device history regardless of @WindowStart/@WindowEnd."},
     ],
+    "usp_Build_FCAP1A_Orders_Extended": [
+        {"check": 1, "note": "The current build inserts all rows from #ClassifiedOrders into dbo.tbl_FCAP1A_Orders_Extended after cohort filtering, so medication and other non-procedure orders remain in the result. For the Procedure Orders topic, add WHERE c.OrderClass = 'Procedure order' on the final INSERT (or materialize a dedicated procedure-only staging CTE) so CptCode/CptDescription remain tied to a true procedure-order contract."},
+        {"check": 3, "note": "If dbo.tbl_FCAP1A_Orders_Extended is being used as the Procedure Orders contract, keep the procedure-specific columns (CptCode, CptDescription, CategoryName, CategoryType, GroupName, OrderClass) and trim medication-only columns (AomMedicationType, AmbulatoryMedication, Generic, GenericMnemonic, GenericMedicationName, TradeMedicationName, NdcDinNumber, CompoundMedication) from the procedure-only publish step unless you explicitly want a mixed-order output."},
+    ],
     "usp_Build_FCAP1A_PatientInsurance": [
         {"check": 1, "note": "Snapshot topic filters on COALESCE(PolicyEffectiveDate, InsuranceExpirationDate, RowUpdateDateTime) with a lower bound; older coverage that is still valid but was never updated inside the window is dropped. For a snapshot contract, do not lower-bound on row-update time."},
     ],
@@ -198,8 +205,7 @@ CURATED_SUGGESTIONS = {
 
 
 def load_sql_text(asset):
-    path = resolve_sql_path(asset["file"])
-    return read_sql_file(path)
+    return resolve_asset_sql(asset)[1]
 
 
 def normalize_proc_name(value):
@@ -257,6 +263,17 @@ def resolve_sql_path(filename):
         if preferred:
             return preferred["path"]
     return repo_path
+
+
+def resolve_asset_sql(asset):
+    override_name = ASSET_SQL_OVERRIDES.get(asset["id"])
+    if override_name:
+        preferred = PREFERRED_SQL_INDEX.get(normalize_proc_name(override_name))
+        if preferred:
+            return preferred["path"], preferred["sql"], preferred["proc_name"]
+    path = resolve_sql_path(asset["file"])
+    text = read_sql_file(path)
+    return path, text, parse_procedure_name(text, os.path.splitext(asset["file"])[0])
 
 
 def proc_header(text):
@@ -501,8 +518,7 @@ def base_overlap_suggestion(output, tables):
 
 
 def audit_asset(asset, tables):
-    path = resolve_sql_path(asset["file"])
-    text = read_sql_file(path)
+    path, text, resolved_proc = resolve_asset_sql(asset)
     declaration, proc_name, params = proc_header(text)
     author = parse_author(text)
     if author is None and path != os.path.join(SQL_DIR, asset["file"]):
@@ -512,7 +528,7 @@ def audit_asset(asset, tables):
         author = "test"
     flags = {
         "declaration": declaration, "author": author,
-        "procedure": proc_name,
+        "procedure": proc_name or resolved_proc,
         "parameters": params,
         "try_catch": bool(re.search(r"\bBEGIN\s+TRY\b", text, re.I)),
         "xact_abort": bool(re.search(r"SET\s+XACT_ABORT\s+ON", text, re.I)),
@@ -631,6 +647,7 @@ def main():
             suffix = existing["name"]
             procedure = "usp_Build_" + suffix
             output = existing["out"]
+            primary_asset_id = (existing.get("assets") or [procedure])[0]
             if existing["status"] == "blueprint":
                 status = "blueprint"
             elif topic["id"] in SHARED_TOPIC_IDS:
@@ -641,12 +658,13 @@ def main():
             suffix = PROPOSED[topic["id"]]
             procedure = "usp_Build_" + suffix
             output = "tbl_" + suffix
+            primary_asset_id = procedure
             status = "source-gap"
 
-        asset = assets.get(procedure)
-        audit = asset_audits.get(procedure)
+        asset = assets.get(primary_asset_id)
+        audit = asset_audits.get(primary_asset_id)
         if audit:
-            primary_asset_ids.add(procedure)
+            primary_asset_ids.add(primary_asset_id)
         sql_read = audit["sql_sources"] if audit else []
         planned = list(topic.get("tables", []))
         missing_sources = sorted(set(planned) - set(sql_read)) if audit else []
@@ -770,7 +788,7 @@ def main():
             "output_time_columns": output_time_cols, "event_rationale": rationale,
             "planned_sources": planned, "sql_sources": sql_read,
             "missing_sources": missing_sources, "extra_sources": extra_sources,
-            "asset": procedure if audit else None, "author": audit.get("author") if audit else None,
+            "asset": primary_asset_id if audit else None, "author": audit.get("author") if audit else None,
             "evidence_tier": evidence_tier, "evidence_note": evidence_note, "findings": findings,
             "recommendations": recommendations, "suggestions": suggestions, "review_checks": review_checks, "improved_sp": improved_sp,
             "query": query, "query_kind": query_kind,

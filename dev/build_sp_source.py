@@ -31,6 +31,9 @@ OUT_PATH = os.path.join(ROOT, "data", "sp_source.js")
 KEY_ORDER = ["SourceID", "PatientID", "VisitID"]
 SQL_KEYWORDS = {"as", "cross", "full", "inner", "join", "left", "on", "outer", "right", "where", "with", "group", "order", "union", "having"}
 EVIDENCE_RANK = {"procedure": 6, "curated": 5, "schema-fk": 4, "table-family": 4, "key-grain": 3, "information-schema-key-match": 2, "topic-contract": 1}
+ASSET_SQL_OVERRIDES = {
+    "usp_Build_FCAP1A_ProcedureOrders": "usp_Build_FCAP1A_Orders_Extended",
+}
 
 
 def load_js(path, variable):
@@ -108,6 +111,13 @@ def resolve_sql_asset(path, preferred_index):
         if preferred:
             return preferred["path"], preferred["sql"], preferred["proc_name"]
     return path, repo_sql, repo_proc
+
+
+def resolve_asset_override(asset_id, preferred_index):
+    override_name = ASSET_SQL_OVERRIDES.get(asset_id)
+    if not override_name:
+        return None
+    return preferred_index.get(normalize_proc_name(override_name))
 
 
 def extract_joins(text, tables, asset_id):
@@ -415,7 +425,11 @@ def main():
     for path in sorted(glob.glob(os.path.join(SQL_DIR, "*.sql"))):
         filename = os.path.basename(path)
         asset_id = os.path.splitext(filename)[0]
-        resolved_path, sql, resolved_proc = resolve_sql_asset(path, preferred_index)
+        override = resolve_asset_override(asset_id, preferred_index)
+        if override:
+            resolved_path, sql, resolved_proc = override["path"], override["sql"], override["proc_name"]
+        else:
+            resolved_path, sql, resolved_proc = resolve_sql_asset(path, preferred_index)
         author = parse_author(sql)
         if author is None and resolved_path != path:
             author = parse_author(read_sql_file(path))
